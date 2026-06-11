@@ -1,0 +1,9 @@
+{
+  "name": "zerrillo-backup",
+  "version": "1.0.0",
+  "description": "Backup automatico giornaliero — database Supabase + sorgente app",
+  "main": "backup.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.104.0"
+  }
+}
