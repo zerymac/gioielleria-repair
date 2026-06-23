@@ -6,21 +6,70 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 ## Current Progress
 
 ### Funzionalità aggiunte in questa sessione
-- **Operatore**: step 0 nel wizard riparazioni (4 opzioni: Adri, Massi, Jenny, Manu) con selezione a card colorate. Nome operatore visibile sull'etichetta NEGOZIO.
-- **Layout responsivo**: breakpoint `BP=768`. Su iPad/Mac appare sidebar a sinistra (220px) e il contenuto principale a destra. Su mobile rimane la barra tab in basso. `FullScreen` diventa dialog centrato su MD+. `Sheet` ha un `footer` prop non scrollabile.
-- **Consegna modal**: il pulsante conferma è ora fisso in basso (footer non scrollabile di Sheet), non richiede più scroll.
-- **Spesa e prezzo finale inline**: modificabili direttamente nel dettaglio riparazione anche per riparazioni interne (non solo al ritorno dal riparatore).
-- **Date tracciate automaticamente**:
-  - `dataSpedita` → quando la riparazione va "presso_esterno" (via DDT o cambio stato)
-  - `dataRientrata` → quando la riparazione rientra (handleReturn / handleRientroRapido)
-  - `dataConsegnata` → quando viene consegnata al cliente (handleConsegna o status "consegnato")
-- **Date visibili nel dettaglio**: righe condizionali 📤/📥/🤝 mostrate solo se il valore esiste.
-- **Totali DDT corretti**: calcolati su tutte le riparazioni rientrate (non solo DDT con stato "rientrato"), escludendo quelle ancora "presso_esterno".
-- **Messaggio WhatsApp "pronto"**: include il prezzo finale se presente.
-- **Stampa automatica disabilitata**: su riparazioni multi-oggetto la stampa non parte più in automatico al salvataggio.
 
-### Migrazioni Supabase da eseguire (se non già fatto)
+- **Etichetta riparazione interna**: quando `riparazioneInterna = true`, la funzione `receiptHTML` non stampa l'etichetta RIPARATORE — solo CLIENTE e NEGOZIO.
+
+- **Stato "Reso non riparato"**: aggiunto a `STATUSES` (rosso `#DC2626`). In `DDTReturn` e `RientroRapido` step 2, quando selezionato: campo prezzo finale nascosto, campo causale visibile, WAToast con messaggio precompilato per il cliente.
+
+- **WAToast preventivo al cliente**: quando si salva il preventivo su una riparazione con `richiestaPreventivo = true` e preventivo non ancora accettato, appare automaticamente il WAToast con messaggio per il cliente che include il link di conferma.
+
+- **Fix prezzoFinale nel WAToast "pronto"**: `handleRientroRapido` e `handleReturn` ora passano `{...rep, prezzoFinale: fin}` al toast invece del repair dallo stato vecchio.
+
+- **WA bot automatico per riparatori** (`print-server/wa-bot.js`):
+  - Estende il print server con whatsapp-web.js
+  - Prima esecuzione: mostra QR code come immagine PNG (`/tmp/zerrillo-wa-qr.png`) aperta automaticamente
+  - Sessione salvata in `print-server/.wwebjs_auth/` — non serve riscannerizzare a ogni riavvio
+  - Ascolta Supabase Realtime su `repairs` — quando `preventivo_accettato` passa a `true`, invia automaticamente WA al riparatore (recupera telefono dal DDT)
+  - Guard `realtimeStarted` evita crash su riautenticazione multipla di WhatsApp
+  - Endpoint `GET /wa-status` per verificare connessione WhatsApp
+  - Pre-carica all'avvio gli ID già accettati (`waSent` Set) per evitare reinvii al restart
+
+- **Pagina conferma preventivo** (`supabase/functions/approve-quote/index.ts`):
+  - Edge Function Supabase pubblica (JWT verification disabilitata)
+  - GET `?token=xxx` → mostra pagina con dettagli riparazione e pulsante conferma
+  - POST → segna token come usato (`accepted_at`) e imposta `preventivo_accettato = true` su Supabase
+  - Usa solo entità HTML (nessun carattere UTF-8 nel markup) per evitare problemi encoding
+  - URL: `https://rrkvbvkiuwpqevrfcliw.supabase.co/functions/v1/approve-quote?token=XXX`
+
+- **Tabella `quote_tokens`** su Supabase:
+  - Colonne: `token text PK`, `repair_id text`, `created_at timestamptz`, `accepted_at timestamptz`
+  - RLS abilitato con policy "public access" per allow all
+  - `repair_id` è `text` (non uuid) perché gli ID riparazioni sono stringhe tipo `og0802v2`
+  - `api.createQuoteToken(repairId)` genera UUID, inserisce riga, ritorna token
+
+- **Disdetta preventivo** (`supabase/functions/approve-quote/index.ts`):
+  - Pagina mostra due pulsanti: "Confermo" (verde) e "Rifiuto" (outline rosso)
+  - POST a `?token=xxx&azione=rifiuta` → marca `declined_at` in `quote_tokens`, imposta `preventivo_rifiutato = true` su repairs
+  - Gestione stati già usati: se `accepted_at` o `declined_at` è già valorizzato mostra pagina di avviso appropriata
+  - WA bot ascolta `preventivo_rifiutato = true` e invia notifica al numero mobile del negozio (`SHOP_WA_TEL`)
+
+### Funzionalità aggiunte nelle sessioni precedenti
+- **Ricerca in RientroRapido**: campo di ricerca per numero o cliente nello step 1.
+- **Operatore**: step 0 wizard (Adri, Massi, Jenny, Manu). Visibile sull'etichetta NEGOZIO.
+- **Layout responsivo**: breakpoint `BP=768`. Sidebar su iPad/Mac, tab bar su mobile.
+- **Consegna modal**: pulsante conferma fisso in basso (footer non scrollabile).
+- **Spesa e prezzo finale inline**: modificabili nel dettaglio anche per riparazioni interne.
+- **Date tracciate**: `dataSpedita`, `dataRientrata`, `dataConsegnata` automatiche.
+- **Totali DDT corretti**: escludono riparazioni ancora "presso_esterno".
+- **Stampa automatica disabilitata**: su riparazioni multi-oggetto.
+
+### Migrazioni Supabase eseguite
 ```sql
+-- Tabella quote_tokens (già presente)
+create table public.quote_tokens (
+  token       text primary key,
+  repair_id   text not null,
+  created_at  timestamptz default now(),
+  accepted_at timestamptz
+);
+alter table public.quote_tokens enable row level security;
+create policy "public access" on public.quote_tokens for all using (true) with check (true);
+
+-- Colonne per disdetta preventivo (nuove)
+alter table public.quote_tokens add column if not exists declined_at timestamptz;
+alter table public.repairs add column if not exists preventivo_rifiutato boolean default false;
+
+-- Colonne repairs (eseguire se non già presenti)
 alter table public.repairs add column if not exists operatore text;
 alter table public.repairs add column if not exists acconto numeric;
 alter table public.repairs add column if not exists riparazione_interna boolean default false;
@@ -32,32 +81,70 @@ alter table public.repairers add column if not exists provincia text;
 alter table public.repairers add column if not exists cap text;
 ```
 
+## Git
+- Branch `main` → stato stabile app riparazioni
+- Branch `gestionale` → branch attivo per sviluppo futuro
+- Backup fisico in `~/gioielleria-repair-BACKUP/` (non toccare)
+
+## WA Bot — Note operative
+- Il print server si avvia automaticamente come LaunchAgent (`com.zerrillo.printserver`)
+- Log: `tail -f /tmp/zerrillo-print.log`
+- Riavvio: `launchctl unload ~/Library/LaunchAgents/com.zerrillo.printserver.plist && launchctl load ~/Library/LaunchAgents/com.zerrillo.printserver.plist`
+- Se WhatsApp si disconnette: riavviare il server, il QR si apre automaticamente come immagine
+- Il bot invia WA al riparatore solo se la riparazione ha un DDT con telefono del riparatore
+- Il bot invia WA al negozio (`SHOP_WA_TEL` nel `.env`) quando un cliente rifiuta il preventivo
+- `SHOP_WA_TEL` deve essere il numero mobile del negozio (es. `3331234567`) — senza prefisso `+` o `39`
+- `realtimeStarted` flag evita doppia subscription su riautenticazione WhatsApp
+
+## Edge Function — Note operative
+- Nome funzione: `approve-quote`
+- Deployed su: `https://rrkvbvkiuwpqevrfcliw.supabase.co/functions/v1/approve-quote`
+- JWT Verification: **disabilitata** (necessario per accesso pubblico clienti)
+- Per aggiornare: aprire con TextEdit il file `supabase/functions/approve-quote/index.ts`, copiare tutto, incollare nell'editor Supabase e cliccare Deploy
+- Usa solo entità HTML nel markup (no caratteri UTF-8 diretti) per evitare encoding issues
+
+## Gestionale — Pianificazione futura
+- **Shopify**: integrazione bidirezionale via Admin API (GraphQL)
+- **Supabase**: nuove tabelle `products`, `inventory_movements`, `sales`, `sale_items`, `suppliers`, `purchase_orders`, `metal_prices`
+- **Quotazione metalli**: API esterna (GoldAPI.io); formula `peso × quotazione × titolo + manodopera + margine`
+- **Stampa cartellini**: output ZPL dal print server; stampante consigliata Zebra ZD421 WiFi o TSC TE310
+- **Migrazione dati da ProWeb**: export CSV → import script Node → Supabase
+- **Strategia codice**: estrarre `shared.js` prima di aggiungere nuovi moduli
+
 ## What Worked
-- **PGRST204 fallback**: quando una colonna non esiste su Supabase, `upsertRepair` riprova senza le colonne nuove — evita crash durante il rollout graduale delle migrazioni.
-- **Sheet con footer prop**: struttura flex `display:flex; flexDirection:column` con `flex:1; overflowY:auto` per il contenuto e `flexShrink:0` per il footer — il footer rimane sempre visibile senza scroll.
-- **`useW()` hook + `BP=768`**: hook leggero con `resize` listener per layout responsivo, usato in tutti i componenti principali.
-- **`today()` helper**: ritorna la data corrente come stringa ISO `YYYY-MM-DD`.
+- **PGRST204 fallback**: `upsertRepair` riprova senza le colonne nuove se mancanti.
+- **Sheet con footer prop**: flex layout con `flex:1; overflowY:auto` + `flexShrink:0` per footer fisso.
+- **`useW()` hook + `BP=768`**: layout responsivo leggero.
+- **`realtimeStarted` flag**: evita crash su doppia subscription Supabase Realtime.
+- **`waSent` Set pre-popolato**: evita reinvii WA al riavvio del bot.
+- **HTML entities**: unico modo affidabile per caratteri speciali nelle Edge Function Supabase.
+- **`repair_id text`** in quote_tokens: gli ID riparazioni sono stringhe custom, non UUID.
 
 ## What Didn't Work
-- **`position:sticky; bottom:0`** nel ConsegnaModal: non funziona perché l'elemento era in cima al container scorrevole. Lo sticky bottom funziona solo quando un elemento sta per uscire dal basso.
+- **`position:sticky; bottom:0`**: non funziona se l'elemento è in cima al container scorrevole.
+- **WAToast con repair dallo stato vecchio**: usare `{...rep, prezzoFinale: fin}`.
+- **Foreign key join `repair:repair_id(*)`** in Edge Function: falliva silenziosamente; risolto con due query separate.
+- **`Content-Type: text/html; charset=utf-8`** header in Edge Function: Supabase lo ignora; unica soluzione usare entità HTML.
+- **`repair_id uuid`** in quote_tokens: gli ID riparazioni non sono UUID standard; cambiare in `text`.
 
-## Next Steps / Idee future
-- Nessun task pendente noto al termine della sessione.
-- Le riparazioni vecchie non avranno le nuove date (comportamento atteso — i dati storici non esistono).
-- Possibile futura feature: ricerca/filtro per operatore.
-- Possibile futura feature: report mensile per operatore.
+## Next Steps
+- Verificare il flusso completo: cliente clicca "Confermo" → `preventivo_accettato = true` → bot invia WA al riparatore
+- Acquistare stampante Zebra ZD421 (o TSC TE310) WiFi
+- Richiedere a DicoTec export CSV da ProWeb
+- Iniziare sviluppo gestionale sul branch `gestionale`
 
 ## File principali
-- `src/App.js` — tutta l'app (~3950 righe), unico file React
+- `src/App.js` — tutta l'app (~4100 righe), unico file React
+- `print-server/server.js` — server stampa + avvio WA bot (porta 3001)
+- `print-server/wa-bot.js` — bot WhatsApp automatico per riparatori
+- `supabase/functions/approve-quote/index.ts` — Edge Function conferma preventivo clienti
 - `backup/backup.js` — backup notturno Supabase → Google Drive
-- `backup/restore.js` — ripristino da backup JSON
-- `print-server/` — server Node per stampa etichette (porta 3001)
 - `.env` — credenziali Supabase (`REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`)
 
 ## Pattern chiave da rispettare
 - Tutte le modifiche vanno in `src/App.js`
-- `withSync(fn)` per operazioni DB (gestisce stato sincronizzazione)
+- `withSync(fn)` per operazioni DB
 - `upsertRepair(repair)` per salvare una riparazione completa
-- `api.updateRepairStatus(id, status)` per solo cambio stato (senza dati extra)
-- Non aggiungere commenti esplicativi al codice salvo casi strettamente necessari
+- `api.updateRepairStatus(id, status)` per solo cambio stato
+- Non aggiungere commenti esplicativi salvo casi strettamente necessari
 - Non aggiungere emoji nei file salvo richiesta esplicita

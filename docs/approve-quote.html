@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conferma preventivo &mdash; Zerrillo Preziosi</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F2F2F7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:white;border-radius:20px;padding:32px 24px;max-width:420px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.icon{font-size:52px;text-align:center;margin-bottom:16px;color:#059669}
+h2{font-size:22px;font-weight:700;color:#1C1C1E;margin-bottom:20px;text-align:center}
+.info{background:#F2F2F7;border-radius:14px;padding:16px;margin-bottom:24px}
+.row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #E5E5EA;gap:12px}
+.row:last-child{border-bottom:none}
+.row span{font-size:14px;color:#6B6B6B;flex-shrink:0}
+.row strong{font-size:14px;color:#1C1C1E;text-align:right}
+.row.price strong{font-size:22px;font-weight:800;color:#059669}
+.btn-confirm{width:100%;background:#059669;color:white;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:700;cursor:pointer;margin-top:4px;display:block}
+.btn-decline{width:100%;background:white;color:#DC2626;border:2px solid #DC2626;border-radius:14px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-top:12px;display:block}
+button:disabled{opacity:.5;cursor:not-allowed}
+p{margin-top:16px;font-size:14px;color:#3C3C3C;text-align:center;line-height:1.6}
+.contact a{color:#007AFF;text-decoration:none}
+.shop{font-size:12px;color:#9B9B9B;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="card" id="app"><p style="text-align:center;color:#6B6B6B;padding:32px 0">Caricamento&hellip;</p></div>
+<script>
+var SB_URL = 'https://rrkvbvkiuwpqevrfcliw.supabase.co';
+var SB_KEY = 'sb_publishable_55eCbBBtDiO8KBzOT843XQ_Il35bRIm';
+var SHOP_TEL  = '019564570';
+var SHOP_NOME = 'Zerrillo preziosi S.r.l.';
+var SHOP_CITTA = '17017 Millesimo (SV)';
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function footer() {
+  return '<p class="contact">Per informazioni: <a href="tel:' + SHOP_TEL + '">' + SHOP_TEL + '</a></p>' +
+         '<p class="shop">' + esc(SHOP_NOME) + ' &middot; ' + esc(SHOP_CITTA) + '</p>';
+}
+
+function show(html) {
+  document.getElementById('app').innerHTML = html;
+}
+
+function sbHeaders() {
+  return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+}
+
+async function sbGet(table, qs) {
+  var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + qs, { headers: sbHeaders() });
+  return r.json();
+}
+
+async function sbPatch(table, qs, body) {
+  await fetch(SB_URL + '/rest/v1/' + table + '?' + qs, {
+    method: 'PATCH',
+    headers: Object.assign({}, sbHeaders(), { 'Prefer': 'return=minimal' }),
+    body: JSON.stringify(body)
+  });
+}
+
+async function doConfirm(token, r) {
+  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  await sbPatch('quote_tokens', 'token=eq.' + token, { accepted_at: new Date().toISOString() });
+  await sbPatch('repairs', 'id=eq.' + esc(r.id), { preventivo_accettato: true });
+  show('<div class="icon">&#10003;</div>' +
+    '<h2>Preventivo confermato!</h2>' +
+    '<p>Grazie. Il preventivo di <strong>&euro; ' + esc(r.preventivo) + '</strong> per la riparazione <strong>' + esc(r.numero) + '</strong> &egrave; stato confermato.</p>' +
+    '<p>La contatteremo non appena il lavoro sar&agrave; completato.</p>' +
+    footer());
+}
+
+async function doDecline(token, r) {
+  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  await sbPatch('quote_tokens', 'token=eq.' + token, { declined_at: new Date().toISOString() });
+  await sbPatch('repairs', 'id=eq.' + esc(r.id), { preventivo_rifiutato: true });
+  show('<div class="icon" style="color:#DC2626">&#10007;</div>' +
+    '<h2>Preventivo disdetto</h2>' +
+    '<p>Abbiamo ricevuto la sua disdetta per la riparazione <strong>' + esc(r.numero) + '</strong>.</p>' +
+    '<p>La contatteremo per concordare il ritiro o ulteriori informazioni.</p>' +
+    footer());
+}
+
+async function main() {
+  var token = new URLSearchParams(location.search).get('token');
+  if (!token) { show('<h2>Link non valido</h2>' + footer()); return; }
+
+  var tokens = await sbGet('quote_tokens', 'token=eq.' + token + '&select=*');
+  var tk = tokens && tokens[0];
+  if (!tk) { show('<h2>Link non valido o scaduto</h2>' + footer()); return; }
+
+  var repairs = await sbGet('repairs', 'id=eq.' + tk.repair_id + '&select=*');
+  var r = repairs && repairs[0];
+  if (!r) { show('<h2>Riparazione non trovata</h2>' + footer()); return; }
+
+  if (tk.accepted_at) {
+    show('<div class="icon">&#10003;</div><h2>Preventivo gi&agrave; confermato</h2>' +
+      '<p>Il preventivo per la riparazione <strong>' + esc(r.numero) + '</strong> &egrave; gi&agrave; stato confermato in precedenza.</p>' +
+      footer());
+    return;
+  }
+
+  if (tk.declined_at) {
+    show('<div class="icon" style="color:#DC2626">&#10007;</div><h2>Preventivo gi&agrave; disdetto</h2>' +
+      '<p>Il preventivo per la riparazione <strong>' + esc(r.numero) + '</strong> &egrave; gi&agrave; stato disdetto in precedenza.</p>' +
+      footer());
+    return;
+  }
+
+  show('<h2>Conferma preventivo</h2>' +
+    '<div class="info">' +
+      '<div class="row"><span>Riparazione</span><strong>' + esc(r.numero) + '</strong></div>' +
+      '<div class="row"><span>Oggetto</span><strong>' + esc(r.descrizione) + '</strong></div>' +
+      (r.problema ? '<div class="row"><span>Lavoro</span><strong>' + esc(r.problema) + '</strong></div>' : '') +
+      '<div class="row price"><span>Importo preventivo</span><strong>&euro; ' + esc(r.preventivo) + '</strong></div>' +
+    '</div>' +
+    '<button class="btn-confirm" id="btnConfirm">Confermo il preventivo</button>' +
+    '<button class="btn-decline" id="btnDecline">Rifiuto il preventivo</button>' +
+    footer());
+
+  document.getElementById('btnConfirm').onclick = function() { doConfirm(token, r); };
+  document.getElementById('btnDecline').onclick = function() { doDecline(token, r); };
+}
+
+main().catch(function() {
+  show('<h2>Errore di connessione</h2><p>Riprovare tra qualche secondo.</p>' + footer());
+});
+</script>
+</body>
+</html>
