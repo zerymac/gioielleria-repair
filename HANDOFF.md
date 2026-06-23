@@ -21,10 +21,13 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
   - Branch `gestionale`, cartella `/docs`
   - Sostituisce l'Edge Function Supabase (il browser Mac mostrava l'HTML come testo grezzo)
 
-- **WA bot — notifica disdetta al negozio** (`print-server/wa-bot.js`):
-  - Ascolta `preventivo_rifiutato = true` su Supabase Realtime
-  - Invia WA al numero mobile del negozio con dettagli riparazione e cliente
-  - `waDeclineSent` Set pre-popolato al riavvio per evitare reinvii
+- **WA bot — logica preventivi** (`print-server/wa-bot.js`):
+  - Regola unica: **riparazione esterna → WA al riparatore, interna → WA al negozio** (sia accettazione che disdetta)
+  - Accettato + esterna: WA riparatore "può procedere", stato invariato (`presso_esterno`)
+  - Accettato + interna: stato → `lavorazione`, WA negozio "cliente ha accettato"
+  - Rifiutato + esterna: stato → `reso_non_riparato`, WA riparatore "non procedere, restituire"
+  - Rifiutato + interna: stato → `reso_non_riparato`, WA negozio "cliente ha rifiutato"
+  - `waSent` e `waDeclineSent` Set pre-popolati al riavvio per evitare reinvii
   - Variabile `SHOP_WA_TEL=3441583658` nel `.env`
 
 - **GitHub remote configurato**:
@@ -87,8 +90,7 @@ alter table public.repairers add column if not exists cap text;
 - Log: `tail -f /tmp/zerrillo-print.log`
 - Riavvio: `launchctl unload ~/Library/LaunchAgents/com.zerrillo.printserver.plist && launchctl load ~/Library/LaunchAgents/com.zerrillo.printserver.plist`
 - Se WhatsApp si disconnette: riavviare il server, il QR si apre automaticamente come immagine
-- Il bot invia WA al riparatore solo se la riparazione ha un DDT con telefono del riparatore
-- Il bot invia WA al negozio (`SHOP_WA_TEL=3441583658` nel `.env`) quando un cliente rifiuta il preventivo
+- Esterna → WA al riparatore (solo se DDT ha telefono), interna → WA al negozio (`SHOP_WA_TEL=3441583658`)
 - `realtimeStarted` flag evita doppia subscription su riautenticazione WhatsApp
 
 ## Pagina conferma preventivo — Note operative
@@ -124,8 +126,8 @@ alter table public.repairers add column if not exists cap text;
 
 ## Next Steps
 - Eseguire le migrazioni SQL per `declined_at` e `preventivo_rifiutato` se non ancora fatto
-- Verificare il flusso completo: cliente clicca "Confermo" → `preventivo_accettato = true` → bot invia WA al riparatore
-- Verificare il flusso disdetta: cliente clicca "Rifiuto" → `preventivo_rifiutato = true` → bot invia WA al negozio (3441583658)
+- Verificare il flusso completo accettazione (esterna: WA riparatore; interna: stato lavorazione + WA negozio)
+- Verificare il flusso disdetta (esterna: stato reso_non_riparato + WA riparatore; interna: stato reso_non_riparato + WA negozio)
 - Acquistare stampante Zebra ZD421 (o TSC TE310) WiFi
 - Richiedere a DicoTec export CSV da ProWeb
 - Iniziare sviluppo gestionale sul branch `gestionale`
