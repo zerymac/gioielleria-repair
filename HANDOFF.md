@@ -7,43 +7,38 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ### Funzionalità aggiunte in questa sessione
 
-- **Etichetta riparazione interna**: quando `riparazioneInterna = true`, la funzione `receiptHTML` non stampa l'etichetta RIPARATORE — solo CLIENTE e NEGOZIO.
+- **Disdetta preventivo** (`docs/approve-quote.html`):
+  - Pagina mostra due pulsanti: "Confermo il preventivo" (verde) e "Rifiuto il preventivo" (outline rosso)
+  - Conferma → segna `accepted_at` in `quote_tokens`, imposta `preventivo_accettato = true`
+  - Disdetta → segna `declined_at` in `quote_tokens`, imposta `preventivo_rifiutato = true`
+  - Se il link è già stato usato (in entrambi i sensi) mostra pagina di avviso appropriata
+  - WA bot ascolta `preventivo_rifiutato = true` e invia WA di notifica al numero mobile del negozio (`SHOP_WA_TEL`)
 
-- **Stato "Reso non riparato"**: aggiunto a `STATUSES` (rosso `#DC2626`). In `DDTReturn` e `RientroRapido` step 2, quando selezionato: campo prezzo finale nascosto, campo causale visibile, WAToast con messaggio precompilato per il cliente.
+- **Pagina conferma preventivo su GitHub Pages** (`docs/approve-quote.html`):
+  - Pagina statica HTML+JS, nessun server necessario
+  - Legge `?token` da URL, chiama Supabase REST API direttamente con la anon key
+  - Hosted su: `https://zerymac.github.io/gioielleria-repair/approve-quote.html`
+  - Branch `gestionale`, cartella `/docs`
+  - Sostituisce l'Edge Function Supabase (il browser Mac mostrava l'HTML come testo grezzo)
 
-- **WAToast preventivo al cliente**: quando si salva il preventivo su una riparazione con `richiestaPreventivo = true` e preventivo non ancora accettato, appare automaticamente il WAToast con messaggio per il cliente che include il link di conferma.
+- **WA bot — notifica disdetta al negozio** (`print-server/wa-bot.js`):
+  - Ascolta `preventivo_rifiutato = true` su Supabase Realtime
+  - Invia WA al numero mobile del negozio con dettagli riparazione e cliente
+  - `waDeclineSent` Set pre-popolato al riavvio per evitare reinvii
+  - Variabile `SHOP_WA_TEL=3441583658` nel `.env`
 
-- **Fix prezzoFinale nel WAToast "pronto"**: `handleRientroRapido` e `handleReturn` ora passano `{...rep, prezzoFinale: fin}` al toast invece del repair dallo stato vecchio.
-
-- **WA bot automatico per riparatori** (`print-server/wa-bot.js`):
-  - Estende il print server con whatsapp-web.js
-  - Prima esecuzione: mostra QR code come immagine PNG (`/tmp/zerrillo-wa-qr.png`) aperta automaticamente
-  - Sessione salvata in `print-server/.wwebjs_auth/` — non serve riscannerizzare a ogni riavvio
-  - Ascolta Supabase Realtime su `repairs` — quando `preventivo_accettato` passa a `true`, invia automaticamente WA al riparatore (recupera telefono dal DDT)
-  - Guard `realtimeStarted` evita crash su riautenticazione multipla di WhatsApp
-  - Endpoint `GET /wa-status` per verificare connessione WhatsApp
-  - Pre-carica all'avvio gli ID già accettati (`waSent` Set) per evitare reinvii al restart
-
-- **Pagina conferma preventivo** (`supabase/functions/approve-quote/index.ts`):
-  - Edge Function Supabase pubblica (JWT verification disabilitata)
-  - GET `?token=xxx` → mostra pagina con dettagli riparazione e pulsante conferma
-  - POST → segna token come usato (`accepted_at`) e imposta `preventivo_accettato = true` su Supabase
-  - Usa solo entità HTML (nessun carattere UTF-8 nel markup) per evitare problemi encoding
-  - URL: `https://rrkvbvkiuwpqevrfcliw.supabase.co/functions/v1/approve-quote?token=XXX`
-
-- **Tabella `quote_tokens`** su Supabase:
-  - Colonne: `token text PK`, `repair_id text`, `created_at timestamptz`, `accepted_at timestamptz`
-  - RLS abilitato con policy "public access" per allow all
-  - `repair_id` è `text` (non uuid) perché gli ID riparazioni sono stringhe tipo `og0802v2`
-  - `api.createQuoteToken(repairId)` genera UUID, inserisce riga, ritorna token
-
-- **Disdetta preventivo** (`supabase/functions/approve-quote/index.ts`):
-  - Pagina mostra due pulsanti: "Confermo" (verde) e "Rifiuto" (outline rosso)
-  - POST a `?token=xxx&azione=rifiuta` → marca `declined_at` in `quote_tokens`, imposta `preventivo_rifiutato = true` su repairs
-  - Gestione stati già usati: se `accepted_at` o `declined_at` è già valorizzato mostra pagina di avviso appropriata
-  - WA bot ascolta `preventivo_rifiutato = true` e invia notifica al numero mobile del negozio (`SHOP_WA_TEL`)
+- **GitHub remote configurato**:
+  - Repo pubblico: `https://github.com/zerymac/gioielleria-repair`
+  - Branch `gestionale` pushato e tracciato
 
 ### Funzionalità aggiunte nelle sessioni precedenti
+
+- **Etichetta riparazione interna**: quando `riparazioneInterna = true`, la funzione `receiptHTML` non stampa l'etichetta RIPARATORE — solo CLIENTE e NEGOZIO.
+- **Stato "Reso non riparato"**: aggiunto a `STATUSES` (rosso `#DC2626`). In `DDTReturn` e `RientroRapido` step 2, quando selezionato: campo prezzo finale nascosto, campo causale visibile, WAToast con messaggio precompilato per il cliente.
+- **WAToast preventivo al cliente**: quando si salva il preventivo su una riparazione con `richiestaPreventivo = true` e preventivo non ancora accettato, appare automaticamente il WAToast con messaggio per il cliente che include il link di conferma.
+- **Fix prezzoFinale nel WAToast "pronto"**: `handleRientroRapido` e `handleReturn` ora passano `{...rep, prezzoFinale: fin}` al toast invece del repair dallo stato vecchio.
+- **WA bot automatico per riparatori** (`print-server/wa-bot.js`): ascolta `preventivo_accettato = true`, invia WA al riparatore con telefono preso dal DDT.
+- **Tabella `quote_tokens`**: token UUID per conferma preventivo cliente; `repair_id` è `text` (non uuid).
 - **Ricerca in RientroRapido**: campo di ricerca per numero o cliente nello step 1.
 - **Operatore**: step 0 wizard (Adri, Massi, Jenny, Manu). Visibile sull'etichetta NEGOZIO.
 - **Layout responsivo**: breakpoint `BP=768`. Sidebar su iPad/Mac, tab bar su mobile.
@@ -65,7 +60,7 @@ create table public.quote_tokens (
 alter table public.quote_tokens enable row level security;
 create policy "public access" on public.quote_tokens for all using (true) with check (true);
 
--- Colonne per disdetta preventivo (nuove)
+-- Colonne per disdetta preventivo (DA ESEGUIRE se non ancora fatto)
 alter table public.quote_tokens add column if not exists declined_at timestamptz;
 alter table public.repairs add column if not exists preventivo_rifiutato boolean default false;
 
@@ -83,7 +78,8 @@ alter table public.repairers add column if not exists cap text;
 
 ## Git
 - Branch `main` → stato stabile app riparazioni
-- Branch `gestionale` → branch attivo per sviluppo futuro
+- Branch `gestionale` → branch attivo per sviluppo, traccia `origin/gestionale`
+- Remote: `https://github.com/zerymac/gioielleria-repair`
 - Backup fisico in `~/gioielleria-repair-BACKUP/` (non toccare)
 
 ## WA Bot — Note operative
@@ -92,17 +88,15 @@ alter table public.repairers add column if not exists cap text;
 - Riavvio: `launchctl unload ~/Library/LaunchAgents/com.zerrillo.printserver.plist && launchctl load ~/Library/LaunchAgents/com.zerrillo.printserver.plist`
 - Se WhatsApp si disconnette: riavviare il server, il QR si apre automaticamente come immagine
 - Il bot invia WA al riparatore solo se la riparazione ha un DDT con telefono del riparatore
-- Il bot invia WA al negozio (`SHOP_WA_TEL` nel `.env`) quando un cliente rifiuta il preventivo
-- `SHOP_WA_TEL` deve essere il numero mobile del negozio (es. `3331234567`) — senza prefisso `+` o `39`
+- Il bot invia WA al negozio (`SHOP_WA_TEL=3441583658` nel `.env`) quando un cliente rifiuta il preventivo
 - `realtimeStarted` flag evita doppia subscription su riautenticazione WhatsApp
 
 ## Pagina conferma preventivo — Note operative
 - **URL pubblico**: `https://zerymac.github.io/gioielleria-repair/approve-quote.html?token=XXX`
-- **File**: `docs/approve-quote.html` — pagina statica HTML+JS, nessun server necessario
+- **File**: `docs/approve-quote.html` — pagina statica, nessun server necessario
 - **Hosting**: GitHub Pages, branch `gestionale`, cartella `/docs`
-- **Come funziona**: legge `?token` da URL, chiama Supabase REST API direttamente con la anon key
 - **Per aggiornare**: modificare `docs/approve-quote.html`, commit e push su `gestionale`
-- L'Edge Function `approve-quote` su Supabase non viene più usata (il browser Mac mostrava HTML grezzo invece della pagina renderizzata)
+- L'Edge Function `supabase/functions/approve-quote/index.ts` esiste ancora ma non è più usata
 
 ## Gestionale — Pianificazione futura
 - **Shopify**: integrazione bidirezionale via Admin API (GraphQL)
@@ -113,34 +107,37 @@ alter table public.repairers add column if not exists cap text;
 - **Strategia codice**: estrarre `shared.js` prima di aggiungere nuovi moduli
 
 ## What Worked
+- **GitHub Pages per pagine pubbliche**: pagina HTML+JS statica che chiama Supabase REST API direttamente — funziona in qualsiasi browser, zero server.
 - **PGRST204 fallback**: `upsertRepair` riprova senza le colonne nuove se mancanti.
 - **Sheet con footer prop**: flex layout con `flex:1; overflowY:auto` + `flexShrink:0` per footer fisso.
 - **`useW()` hook + `BP=768`**: layout responsivo leggero.
 - **`realtimeStarted` flag**: evita crash su doppia subscription Supabase Realtime.
 - **`waSent` Set pre-popolato**: evita reinvii WA al riavvio del bot.
-- **HTML entities**: unico modo affidabile per caratteri speciali nelle Edge Function Supabase.
 - **`repair_id text`** in quote_tokens: gli ID riparazioni sono stringhe custom, non UUID.
 
 ## What Didn't Work
+- **Edge Function Supabase per pagine HTML**: il browser Mac mostra l'HTML come testo grezzo nonostante `Content-Type: text/html` — soluzione: GitHub Pages statico.
 - **`position:sticky; bottom:0`**: non funziona se l'elemento è in cima al container scorrevole.
 - **WAToast con repair dallo stato vecchio**: usare `{...rep, prezzoFinale: fin}`.
 - **Foreign key join `repair:repair_id(*)`** in Edge Function: falliva silenziosamente; risolto con due query separate.
-- **`Content-Type: text/html; charset=utf-8`** header in Edge Function: Supabase lo ignora; unica soluzione usare entità HTML.
 - **`repair_id uuid`** in quote_tokens: gli ID riparazioni non sono UUID standard; cambiare in `text`.
 
 ## Next Steps
+- Eseguire le migrazioni SQL per `declined_at` e `preventivo_rifiutato` se non ancora fatto
 - Verificare il flusso completo: cliente clicca "Confermo" → `preventivo_accettato = true` → bot invia WA al riparatore
+- Verificare il flusso disdetta: cliente clicca "Rifiuto" → `preventivo_rifiutato = true` → bot invia WA al negozio (3441583658)
 - Acquistare stampante Zebra ZD421 (o TSC TE310) WiFi
 - Richiedere a DicoTec export CSV da ProWeb
 - Iniziare sviluppo gestionale sul branch `gestionale`
 
 ## File principali
 - `src/App.js` — tutta l'app (~4100 righe), unico file React
+- `docs/approve-quote.html` — pagina statica conferma/disdetta preventivo (GitHub Pages)
 - `print-server/server.js` — server stampa + avvio WA bot (porta 3001)
-- `print-server/wa-bot.js` — bot WhatsApp automatico per riparatori
-- `supabase/functions/approve-quote/index.ts` — Edge Function conferma preventivo clienti
+- `print-server/wa-bot.js` — bot WhatsApp: notifica riparatore (accettazione) e negozio (disdetta)
+- `supabase/functions/approve-quote/index.ts` — Edge Function (non più in uso, mantenuta come backup)
 - `backup/backup.js` — backup notturno Supabase → Google Drive
-- `.env` — credenziali Supabase (`REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`)
+- `.env` — credenziali: `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`, `SHOP_WA_TEL`
 
 ## Pattern chiave da rispettare
 - Tutte le modifiche vanno in `src/App.js`
