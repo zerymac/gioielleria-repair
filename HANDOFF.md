@@ -96,12 +96,13 @@ alter table public.repairers add column if not exists cap text;
 - `SHOP_WA_TEL` deve essere il numero mobile del negozio (es. `3331234567`) — senza prefisso `+` o `39`
 - `realtimeStarted` flag evita doppia subscription su riautenticazione WhatsApp
 
-## Edge Function — Note operative
-- Nome funzione: `approve-quote`
-- Deployed su: `https://rrkvbvkiuwpqevrfcliw.supabase.co/functions/v1/approve-quote`
-- JWT Verification: **disabilitata** (necessario per accesso pubblico clienti)
-- Per aggiornare: aprire con TextEdit il file `supabase/functions/approve-quote/index.ts`, copiare tutto, incollare nell'editor Supabase e cliccare Deploy
-- Usa solo entità HTML nel markup (no caratteri UTF-8 diretti) per evitare encoding issues
+## Pagina conferma preventivo — Note operative
+- **URL pubblico**: `https://zerymac.github.io/gioielleria-repair/approve-quote.html?token=XXX`
+- **File**: `docs/approve-quote.html` — pagina statica HTML+JS, nessun server necessario
+- **Hosting**: GitHub Pages, branch `gestionale`, cartella `/docs`
+- **Come funziona**: legge `?token` da URL, chiama Supabase REST API direttamente con la anon key
+- **Per aggiornare**: modificare `docs/approve-quote.html`, commit e push su `gestionale`
+- L'Edge Function `approve-quote` su Supabase non viene più usata (il browser Mac mostrava HTML grezzo invece della pagina renderizzata)
 
 ## Gestionale — Pianificazione futura
 - **Shopify**: integrazione bidirezionale via Admin API (GraphQL)
