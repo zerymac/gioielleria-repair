@@ -50,7 +50,7 @@ function buildAcceptMessage(repair, riparatore) {
   ];
   if (repair.categoria) lines.push(`Categoria: ${repair.categoria}${repair.tipo_lavoro ? ' · ' + repair.tipo_lavoro : ''}`);
   if (repair.problema)   lines.push(`Lavoro: ${repair.problema}`);
-  if (repair.preventivo) lines.push(`Preventivo: ${repair.preventivo} €`);
+  if (repair.preventivo) lines.push(`Preventivo al pubblico: ${repair.preventivo} €`);
   lines.push('', 'Può procedere con la riparazione.', '', SHOP_NOME, `Tel. ${SHOP_TEL}`);
   return lines.join('\n');
 }
@@ -63,7 +63,7 @@ function buildDeclineRepairerMessage(repair, riparatore) {
     `Oggetto: ${repair.descrizione}`,
   ];
   if (repair.problema)   lines.push(`Lavoro: ${repair.problema}`);
-  if (repair.preventivo) lines.push(`Preventivo: ${repair.preventivo} €`);
+  if (repair.preventivo) lines.push(`Preventivo al pubblico: ${repair.preventivo} €`);
   lines.push('', 'La preghiamo di non procedere e di restituire l\'oggetto.', '', SHOP_NOME, `Tel. ${SHOP_TEL}`);
   return lines.join('\n');
 }
@@ -129,6 +129,15 @@ async function handleAccepted(supabase, repairId) {
     await waClient.sendMessage(phone, buildAcceptMessage(repair, riparatore));
     console.log(`✅ WA accettazione inviato a ${riparatore.nome} per ${repair.numero}`);
 
+    const shopTel = process.env.SHOP_WA_TEL;
+    if (shopTel) {
+      const shopPhone = formatPhone(shopTel);
+      if (shopPhone) {
+        await waClient.sendMessage(shopPhone, buildAcceptShopMessage(repair));
+        console.log(`✅ WA accettazione inviato al negozio per ${repair.numero} (esterna)`);
+      }
+    }
+
   } catch (e) {
     waSent.delete(repairId);
     console.error(`❌ Errore WA accettazione per ${repairId}:`, e.message);
@@ -165,6 +174,14 @@ async function handleDeclined(supabase, repairId) {
         if (phone) {
           await waClient.sendMessage(phone, buildDeclineRepairerMessage(repair, riparatore));
           console.log(`✅ WA disdetta inviato a ${riparatore.nome} per ${repair.numero}`);
+        }
+      }
+      const shopTel = process.env.SHOP_WA_TEL;
+      if (shopTel) {
+        const shopPhone = formatPhone(shopTel);
+        if (shopPhone) {
+          await waClient.sendMessage(shopPhone, buildDeclineShopMessage(repair));
+          console.log(`✅ WA disdetta inviato al negozio per ${repair.numero} (esterna)`);
         }
       }
     }

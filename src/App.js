@@ -100,7 +100,7 @@ const C = {
 
 /* ── API ── */
 const toCustomer = (r) => ({ id:r.id, nome:r.nome, cognome:r.cognome, telefono:r.telefono, telefonoPrefisso:r.telefono_prefisso||"+39", email:r.email, indirizzo:r.indirizzo, codiceFiscale:r.codice_fiscale, note:r.note });
-const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null });
+const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null });
 const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, note:r.note });
 const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, createdAt:r.created_at });
 
@@ -124,10 +124,10 @@ const api = {
   async upsertRepair(r) {
     const clean=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
     const cs=(v)=>(v===""||v===undefined)?null:v;
-    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null };
+    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null };
     const {error}=await supabase.from("repairs").upsert(payload);
     if(error){
-      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,...rest}=payload;await supabase.from("repairs").upsert(rest);}
+      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,...rest}=payload;await supabase.from("repairs").upsert(rest);}
       else console.error("upsertRepair:",error);
     }
   },
@@ -496,7 +496,8 @@ const LABEL_CSS=`
 
 /* ── Etichetta singola — 62x100mm portrait ── */
 function receiptHTML(r,c) {
-  const qrUrl="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="+encodeURIComponent(r.numero)+"&bgcolor=ffffff&color=000000&qzone=2&ecc=H";
+  const statusUrl=r.linkToken?`https://zerymac.github.io/gioielleria-repair/repair-status.html?token=${r.linkToken}&n=${r.numero}`:r.numero;
+  const qrUrl="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="+encodeURIComponent(statusUrl)+"&bgcolor=ffffff&color=000000&qzone=2&ecc=H";
   const hdr=(tag)=>`<div class="hdr"><img class="logo" src="${zerrilloLogo}" alt=""/><span class="copy">${tag}</span></div>`;
   /* Nome cliente in cima — primo dato leggibile */
   const custTop=c?`<div class="ctop"><div class="ctop-name">${c.nome} ${c.cognome}</div>${c.telefono?`<div class="ctop-phone">Tel. ${displayPhone(c)}</div>`:""}</div>`:`<div class="ctop"><div class="ctop-name">&mdash;</div></div>`;
@@ -515,7 +516,8 @@ function receiptHTML(r,c) {
 /* ── Multi-oggetto — 62x100mm portrait ── */
 function multiReceiptHTML(repairs,c) {
   const first=repairs[0];
-  const qrUrl0="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="+encodeURIComponent(first.numero)+"&bgcolor=ffffff&color=000000&qzone=2&ecc=H";
+  const statusUrl0=first.linkToken?`https://zerymac.github.io/gioielleria-repair/repair-status.html?token=${first.linkToken}&n=${first.numero}`:first.numero;
+  const qrUrl0="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="+encodeURIComponent(statusUrl0)+"&bgcolor=ffffff&color=000000&qzone=2&ecc=H";
   const hdr=(tag)=>`<div class="hdr"><img class="logo" src="${zerrilloLogo}" alt=""/><span class="copy">${tag}</span></div>`;
   const prevTot=repairs.reduce((s,r)=>s+(parseFloat(r.preventivo)||0),0);
   const hasRich=repairs.some(r=>r.richiestaPreventivo);
@@ -531,7 +533,7 @@ function multiReceiptHTML(repairs,c) {
   const cliLabel=`<div class="label">${hdr("CLIENTE &middot; "+repairs.length+" OGG.")}${summaryBody}</div>`;
   const negLabel=`<div class="label">${hdr("NEGOZIO &middot; "+repairs.length+" OGG.")}${summaryBody}${opNeg}</div>`;
   const ripLabels=repairs.map((r,i)=>{
-    const qri="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="+encodeURIComponent(r.numero)+"&bgcolor=ffffff&color=000000&qzone=2&ecc=H";
+    const qri="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="+encodeURIComponent(r.linkToken?`https://zerymac.github.io/gioielleria-repair/repair-status.html?token=${r.linkToken}&n=${r.numero}`:r.numero)+"&bgcolor=ffffff&color=000000&qzone=2&ecc=H";
     const qSi=`<div class="qr-row"><img class="qr-img" src="${qri}" alt=""/><div class="qr-text"><div class="num">${r.numero}</div><div class="dts">Ricevuto: ${fmtDate(r.dataRicevuta)}</div><div class="dts">Consegna: ${fmtDate(r.dataConsegna)||"Da definire"}</div></div></div>`;
     const oFull=`<div class="obj"><div class="sec">Oggetto ${i+1} di ${repairs.length}</div><div class="ocat">${r.categoria}${r.tipoLavoro?" &middot; "+r.tipoLavoro:""}</div><div class="odesc">${r.descrizione}</div>${r.materiali?`<div class="omat">Materiali: ${r.materiali}</div>`:""}${r.mano?`<div class="omat">Mano ${r.mano} &middot; ${r.dito}</div>`:""}<div class="sec" style="margin-top:1.5mm">Lavoro</div><div class="oprob">${r.problema||"&mdash;"}</div>${r.richiestaPreventivo?`<div class="oprev-warn">⏳ Preventivo da richiedere</div>`:""}${r.preventivo?`<div class="prev"><span class="prevl">Prev.${r.preventivoAccettato?" ✓":""}</span><span class="prevv">${r.preventivo} &euro;</span></div>`:""}</div>`;
     return `<div class="label">${hdr("RIPARATORE")}${qSi}<div class="div"></div>${oFull}${foot}</div>`;
@@ -3865,7 +3867,8 @@ function MainApp() {
       const item=allItems[i];
       const numero=await api.getNextRepairNum();
       const id=uid();
-      const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null};
+      const linkToken=(crypto.randomUUID??(() => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16))))();
+      const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
       if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;}
       await api.upsertRepair(n);
       savedRepairs.push(n);

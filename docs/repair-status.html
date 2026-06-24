@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stato riparazione &mdash; Zerrillo Preziosi</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F2F2F7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:white;border-radius:20px;padding:32px 24px;max-width:420px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+h2{font-size:20px;font-weight:700;color:#1C1C1E;margin-bottom:20px;text-align:center}
+.status-badge{display:inline-flex;align-items:center;gap:8px;border-radius:20px;padding:8px 16px;font-size:14px;font-weight:700;margin-bottom:20px;width:100%;justify-content:center}
+.info{background:#F2F2F7;border-radius:14px;padding:16px;margin-bottom:24px}
+.row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #E5E5EA;gap:12px}
+.row:last-child{border-bottom:none}
+.row span{font-size:14px;color:#6B6B6B;flex-shrink:0}
+.row strong{font-size:14px;color:#1C1C1E;text-align:right}
+.row.price strong{font-size:22px;font-weight:800;color:#059669}
+.section-title{font-size:13px;font-weight:700;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px}
+.btn-confirm{width:100%;background:#059669;color:white;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:700;cursor:pointer;margin-top:4px;display:block}
+.btn-decline{width:100%;background:white;color:#DC2626;border:2px solid #DC2626;border-radius:14px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-top:12px;display:block}
+button:disabled{opacity:.5;cursor:not-allowed}
+.prev-box{background:#FFF8E1;border:1.5px solid #F59E0B;border-radius:14px;padding:16px;margin-bottom:16px}
+.prev-box .prev-title{font-size:13px;font-weight:700;color:#92400E;margin-bottom:8px}
+.prev-box .prev-amount{font-size:28px;font-weight:800;color:#059669;margin-bottom:4px}
+.prev-box .prev-note{font-size:13px;color:#6B6B6B}
+.accepted-box{background:#ECFDF5;border:1.5px solid #059669;border-radius:14px;padding:14px;text-align:center;color:#059669;font-weight:700;font-size:15px}
+.declined-box{background:#FEF2F2;border:1.5px solid #DC2626;border-radius:14px;padding:14px;text-align:center;color:#DC2626;font-weight:700;font-size:15px}
+p{margin-top:16px;font-size:14px;color:#3C3C3C;text-align:center;line-height:1.6}
+.contact a{color:#007AFF;text-decoration:none}
+.shop{font-size:12px;color:#9B9B9B;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="card" id="app"><p style="text-align:center;color:#6B6B6B;padding:32px 0">Caricamento&hellip;</p></div>
+<script>
+var SB_URL = 'https://rrkvbvkiuwpqevrfcliw.supabase.co';
+var SB_KEY = 'sb_publishable_55eCbBBtDiO8KBzOT843XQ_Il35bRIm';
+var SHOP_TEL  = '019564570';
+var SHOP_NOME = 'Zerrillo preziosi S.r.l.';
+var SHOP_CITTA = '17017 Millesimo (SV)';
+
+var STATUS_LABELS = {
+  ricevuto:          { label: 'Ricevuta',                   color: '#1D4ED8', bg: '#EFF6FF' },
+  lavorazione:       { label: 'In lavorazione',             color: '#D97706', bg: '#FFFBEB' },
+  presso_esterno:    { label: 'Presso laboratorio esterno', color: '#7C3AED', bg: '#F5F3FF' },
+  pronto:            { label: 'Pronta per il ritiro',       color: '#059669', bg: '#ECFDF5' },
+  consegnato:        { label: 'Consegnata',                 color: '#6B7280', bg: '#F3F4F6' },
+  reso_non_riparato: { label: 'Non riparabile',             color: '#DC2626', bg: '#FEF2F2' },
+};
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function footer() {
+  return '<p class="contact">Per informazioni: <a href="tel:' + SHOP_TEL + '">' + SHOP_TEL + '</a></p>' +
+         '<p class="shop">' + esc(SHOP_NOME) + ' &middot; ' + esc(SHOP_CITTA) + '</p>';
+}
+
+function show(html) {
+  document.getElementById('app').innerHTML = html;
+}
+
+function sbHeaders() {
+  return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+}
+
+async function sbGet(table, qs) {
+  var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + qs, { headers: sbHeaders() });
+  return r.json();
+}
+
+async function sbPatch(table, qs, body) {
+  await fetch(SB_URL + '/rest/v1/' + table + '?' + qs, {
+    method: 'PATCH',
+    headers: Object.assign({}, sbHeaders(), { 'Prefer': 'return=minimal' }),
+    body: JSON.stringify(body)
+  });
+}
+
+async function doConfirm(quoteToken, r) {
+  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  await sbPatch('quote_tokens', 'token=eq.' + quoteToken, { accepted_at: new Date().toISOString() });
+  await sbPatch('repairs', 'id=eq.' + esc(r.id), { preventivo_accettato: true });
+  show('<p style="text-align:center;font-size:40px">&#10003;</p>' +
+    '<h2>Preventivo confermato!</h2>' +
+    '<p>Grazie. Il preventivo di <strong>&euro; ' + esc(r.preventivo) + '</strong> per la riparazione <strong>' + esc(r.numero) + '</strong> &egrave; stato confermato.</p>' +
+    '<p>La contatteremo non appena il lavoro sar&agrave; completato.</p>' +
+    footer());
+}
+
+async function doDecline(quoteToken, r) {
+  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  await sbPatch('quote_tokens', 'token=eq.' + quoteToken, { declined_at: new Date().toISOString() });
+  await sbPatch('repairs', 'id=eq.' + esc(r.id), { preventivo_rifiutato: true });
+  show('<p style="text-align:center;font-size:40px;color:#DC2626">&#10007;</p>' +
+    '<h2>Preventivo disdetto</h2>' +
+    '<p>Abbiamo ricevuto la sua disdetta per la riparazione <strong>' + esc(r.numero) + '</strong>.</p>' +
+    '<p>La contatteremo per concordare il ritiro o ulteriori informazioni.</p>' +
+    footer());
+}
+
+function renderStatus(r, quoteToken) {
+  var st = STATUS_LABELS[r.status] || { label: r.status || '—', color: '#6B7280', bg: '#F3F4F6' };
+
+  var rows = '<div class="row"><span>Riparazione</span><strong>' + esc(r.numero) + '</strong></div>' +
+             '<div class="row"><span>Oggetto</span><strong>' + esc(r.descrizione) + '</strong></div>';
+  if (r.categoria) rows += '<div class="row"><span>Categoria</span><strong>' + esc(r.categoria) + (r.tipo_lavoro ? ' &middot; ' + esc(r.tipo_lavoro) : '') + '</strong></div>';
+  if (r.problema)  rows += '<div class="row"><span>Lavoro</span><strong>' + esc(r.problema) + '</strong></div>';
+  if (r.data_consegna) rows += '<div class="row"><span>Consegna prevista</span><strong>' + esc(r.data_consegna) + '</strong></div>';
+
+  var prevSection = '';
+  if (r.richiesta_preventivo_fornitore && r.preventivo) {
+    if (r.preventivo_accettato) {
+      prevSection = '<div class="accepted-box">&#10003; Preventivo confermato &mdash; &euro; ' + esc(r.preventivo) + '</div>';
+    } else if (r.preventivo_rifiutato) {
+      prevSection = '<div class="declined-box">&#10007; Preventivo disdetto &mdash; &euro; ' + esc(r.preventivo) + '</div>';
+    } else if (quoteToken) {
+      prevSection =
+        '<div class="section-title">Preventivo in attesa</div>' +
+        '<div class="prev-box">' +
+          '<div class="prev-title">Importo preventivo</div>' +
+          '<div class="prev-amount">&euro; ' + esc(r.preventivo) + '</div>' +
+          '<div class="prev-note">Confermi o rifiuti il preventivo qui sotto.</div>' +
+        '</div>' +
+        '<button class="btn-confirm" id="btnConfirm">Confermo il preventivo</button>' +
+        '<button class="btn-decline" id="btnDecline">Rifiuto il preventivo</button>';
+    }
+  }
+
+  show(
+    '<div class="status-badge" style="color:' + st.color + ';background:' + st.bg + '">' + esc(st.label) + '</div>' +
+    '<h2>Riparazione ' + esc(r.numero) + '</h2>' +
+    '<div class="info">' + rows + '</div>' +
+    prevSection +
+    footer()
+  );
+
+  if (quoteToken && r.richiesta_preventivo_fornitore && r.preventivo && !r.preventivo_accettato && !r.preventivo_rifiutato) {
+    document.getElementById('btnConfirm').onclick = function() { doConfirm(quoteToken, r); };
+    document.getElementById('btnDecline').onclick = function() { doDecline(quoteToken, r); };
+  }
+}
+
+async function main() {
+  var token = new URLSearchParams(location.search).get('token');
+  if (!token) { show('<h2>Link non valido</h2>' + footer()); return; }
+
+  var repairs = await sbGet('repairs', 'link_token=eq.' + token + '&eliminata=eq.false&select=*');
+  var r = repairs && repairs[0];
+  if (!r) { show('<h2>Riparazione non trovata</h2>' + footer()); return; }
+
+  var quoteToken = null;
+  if (r.richiesta_preventivo_fornitore && r.preventivo && !r.preventivo_accettato && !r.preventivo_rifiutato) {
+    var tokens = await sbGet('quote_tokens',
+      'repair_id=eq.' + r.id + '&accepted_at=is.null&declined_at=is.null&select=token&order=created_at.desc&limit=1');
+    if (tokens && tokens[0]) quoteToken = tokens[0].token;
+  }
+
+  renderStatus(r, quoteToken);
+}
+
+main().catch(function() {
+  show('<h2>Errore di connessione</h2><p>Riprovare tra qualche secondo.</p>' + footer());
+});
+</script>
+</body>
+</html>
