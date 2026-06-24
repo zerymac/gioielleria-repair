@@ -225,7 +225,7 @@ function initWABot() {
 
   waClient = new Client({
     authStrategy: new LocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
-    puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+    puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'], timeout: 120000 },
   });
 
   waClient.on('qr', async qr => {
