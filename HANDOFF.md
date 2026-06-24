@@ -22,13 +22,30 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
   - Sostituisce l'Edge Function Supabase (il browser Mac mostrava l'HTML come testo grezzo)
 
 - **WA bot — logica preventivi** (`print-server/wa-bot.js`):
-  - Regola unica: **riparazione esterna → WA al riparatore, interna → WA al negozio** (sia accettazione che disdetta)
-  - Accettato + esterna: WA riparatore "può procedere", stato invariato (`presso_esterno`)
+  - **Esterna**: WA al riparatore (se ha telefono) + WA al negozio — sempre entrambi
+  - **Interna**: WA al negozio — sia accettazione che disdetta
+  - Accettato + esterna: WA riparatore "può procedere" + WA negozio, stato invariato (`presso_esterno`)
   - Accettato + interna: stato → `lavorazione`, WA negozio "cliente ha accettato"
-  - Rifiutato + esterna: stato → `reso_non_riparato`, WA riparatore "non procedere, restituire"
+  - Rifiutato + esterna: stato → `reso_non_riparato`, WA riparatore "non procedere" + WA negozio
   - Rifiutato + interna: stato → `reso_non_riparato`, WA negozio "cliente ha rifiutato"
+  - WA riparatore specifica "Preventivo al pubblico: X €"
   - `waSent` e `waDeclineSent` Set pre-popolati al riavvio per evitare reinvii
+  - **Attenzione**: per ritestare un WA non inviato → resetta DB, riavvia server, poi ri-accetta
   - Variabile `SHOP_WA_TEL=3441583658` nel `.env`
+
+- **Link stato riparazione + QR code** (`docs/repair-status.html`):
+  - Ogni nuova riparazione genera un `link_token` UUID salvato in `repairs.link_token`
+  - QR code sulle etichette punta a `repair-status.html?token=XXX&n=NUMERO` (scanner interni funzionano ancora: trovano `R\d{4}-\d{4}` nell'URL)
+  - Pagina mostra stato con badge colorato + dettagli riparazione
+  - Se preventivo in attesa e `quote_token` valido → mostra pulsanti accetta/rifiuta
+  - Hosted su GitHub Pages, branch `gestionale`, cartella `/docs`
+  - Migrazione eseguita: `alter table public.repairs add column if not exists link_token text;`
+  - `crypto.randomUUID()` usato con try/catch per compatibilità localhost e iPhone via IP
+
+- **Toggle "Richiesta preventivo"** (rinominato da "Richiesta preventivo al fornitore"):
+  - Non più mutuamente esclusivo con "Riparazione interna"
+  - Sottotitolo si adatta: interna → "prima di procedere internamente", esterna → "dal riparatore esterno"
+  - Badge lista e etichetta stampata aggiornati
 
 - **GitHub remote configurato**:
   - Repo pubblico: `https://github.com/zerymac/gioielleria-repair`
