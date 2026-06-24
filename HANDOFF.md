@@ -92,6 +92,7 @@ alter table public.repairers add column if not exists cap text;
 - Se WhatsApp si disconnette: riavviare il server, il QR si apre automaticamente come immagine
 - Esterna → WA al riparatore (solo se DDT ha telefono), interna → WA al negozio (`SHOP_WA_TEL=3441583658`)
 - `realtimeStarted` flag evita doppia subscription su riautenticazione WhatsApp
+- **Resilienza riavvio dopo caduta di corrente**: timeout Puppeteer impostato a 120s (default 30s troppo basso su reboot freddo); plist ha `ThrottleInterval: 30s` per evitare loop rapidi di riavvio
 
 ## Pagina conferma preventivo — Note operative
 - **URL pubblico**: `https://zerymac.github.io/gioielleria-repair/approve-quote.html?token=XXX`
@@ -116,6 +117,8 @@ alter table public.repairers add column if not exists cap text;
 - **`realtimeStarted` flag**: evita crash su doppia subscription Supabase Realtime.
 - **`waSent` Set pre-popolato**: evita reinvii WA al riavvio del bot.
 - **`repair_id text`** in quote_tokens: gli ID riparazioni sono stringhe custom, non UUID.
+
+- **LaunchAgent plist `ThrottleInterval`**: non è in repo (sta in `~/Library/LaunchAgents/`), va riapplicato manualmente su un nuovo Mac. Valore attuale: 30s su `com.zerrillo.printserver.plist`.
 
 ## What Didn't Work
 - **Edge Function Supabase per pagine HTML**: il browser Mac mostra l'HTML come testo grezzo nonostante `Content-Type: text/html` — soluzione: GitHub Pages statico.
