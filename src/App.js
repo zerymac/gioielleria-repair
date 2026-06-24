@@ -138,7 +138,7 @@ const api = {
   async updateRepairReturn(id,fields) { await supabase.from("repairs").update({ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }).eq("id",id); },
   async getDDTs() { const {data}=await supabase.from("ddts").select("*").order("created_at",{ascending:false}); return (data||[]).map(toDDT); },
   async upsertDDT(d) { await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, note:d.note }); },
-  async createQuoteToken(repairId) { const token=crypto.randomUUID(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
+  async createQuoteToken(repairId) { const token=(crypto.randomUUID??(() => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16))))(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
   async deleteDDT(id) { await supabase.from("ddts").delete().eq("id",id); },
   async getRepairers() { const {data}=await supabase.from("repairers").select("*").order("nome"); return data||[]; },
   async upsertRepairer(r) {
