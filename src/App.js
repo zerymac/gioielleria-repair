@@ -138,7 +138,7 @@ const api = {
   async updateRepairReturn(id,fields) { await supabase.from("repairs").update({ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }).eq("id",id); },
   async getDDTs() { const {data}=await supabase.from("ddts").select("*").order("created_at",{ascending:false}); return (data||[]).map(toDDT); },
   async upsertDDT(d) { await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, note:d.note }); },
-  async createQuoteToken(repairId) { const token=(crypto.randomUUID??(() => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16))))(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
+  async createQuoteToken(repairId) { const token=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
   async deleteDDT(id) { await supabase.from("ddts").delete().eq("id",id); },
   async getRepairers() { const {data}=await supabase.from("repairers").select("*").order("nome"); return data||[]; },
   async upsertRepairer(r) {
@@ -502,7 +502,7 @@ function receiptHTML(r,c) {
   /* Nome cliente in cima — primo dato leggibile */
   const custTop=c?`<div class="ctop"><div class="ctop-name">${c.nome} ${c.cognome}</div>${c.telefono?`<div class="ctop-phone">Tel. ${displayPhone(c)}</div>`:""}</div>`:`<div class="ctop"><div class="ctop-name">&mdash;</div></div>`;
   const qrRow=`<div class="qr-row"><img class="qr-img" src="${qrUrl}" alt=""/><div class="qr-text"><div class="num">${r.numero}</div><div class="dts">Ricevuto: ${fmtDate(r.dataRicevuta)}</div><div class="dts">Consegna: ${fmtDate(r.dataConsegna)||"Da definire"}</div></div></div>`;
-  const objFull=`<div class="obj"><div class="sec">Oggetto</div><div class="ocat">${r.categoria}${r.tipoLavoro?" &middot; "+r.tipoLavoro:""}</div><div class="odesc">${r.descrizione}</div>${r.materiali?`<div class="omat">Materiali: ${r.materiali}</div>`:""}${r.mano?`<div class="omat">Mano ${r.mano} &middot; ${r.dito}</div>`:""}<div class="sec" style="margin-top:1.5mm">Lavoro richiesto</div><div class="oprob">${r.problema||"&mdash;"}</div>${r.richiestaPreventivo?`<div class="oprev-warn">⏳ Preventivo da richiedere al fornitore</div>`:""}${r.preventivo?`<div class="prev"><span class="prevl">Preventivo${r.preventivoAccettato?" ✓":""}</span><span class="prevv">${r.preventivo} &euro;</span></div>`:""}</div>`;
+  const objFull=`<div class="obj"><div class="sec">Oggetto</div><div class="ocat">${r.categoria}${r.tipoLavoro?" &middot; "+r.tipoLavoro:""}</div><div class="odesc">${r.descrizione}</div>${r.materiali?`<div class="omat">Materiali: ${r.materiali}</div>`:""}${r.mano?`<div class="omat">Mano ${r.mano} &middot; ${r.dito}</div>`:""}<div class="sec" style="margin-top:1.5mm">Lavoro richiesto</div><div class="oprob">${r.problema||"&mdash;"}</div>${r.richiestaPreventivo?`<div class="oprev-warn">⏳ Preventivo da richiedere${r.riparazioneInterna?" internamente":" al fornitore"}</div>`:""}${r.preventivo?`<div class="prev"><span class="prevl">Preventivo${r.preventivoAccettato?" ✓":""}</span><span class="prevv">${r.preventivo} &euro;</span></div>`:""}</div>`;
   const foot=`<div class="foot">${SHOP.nome} &middot; ${SHOP.indirizzo}, ${SHOP.citta} &middot; Tel. ${SHOP.tel}</div>`;
   const opNeg=r.operatore?`<div style="font-size:7pt;font-weight:700;color:#555;padding:.5mm 2mm 0">Ricevuta da: ${r.operatore}</div>`:"";
   const cliente=`<div class="label">${hdr("CLIENTE")}${custTop}<div class="div"></div>${qrRow}<div class="div"></div>${objFull}${foot}</div>`;
@@ -881,7 +881,7 @@ function RepairCard({repair:r,customer:c,ddt,onPress,onReceipt}) {
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:5}}>
             {isOverdue&&<span style={{fontSize:11,background:"#FFF1F2",color:C.red,padding:"2px 7px",borderRadius:8,fontWeight:600}}>⚠️ In ritardo</span>}
             {r.riparazioneInterna&&<span style={{fontSize:11,background:"#FFF7ED",color:"#C2410C",padding:"2px 7px",borderRadius:8,fontWeight:600}}>🏠 Interna</span>}
-            {r.richiestaPreventivo&&<span style={{fontSize:11,background:"#F5F3FF",color:C.purple,padding:"2px 7px",borderRadius:8,fontWeight:600}}>⏳ Prev. fornitore</span>}
+            {r.richiestaPreventivo&&<span style={{fontSize:11,background:"#F5F3FF",color:C.purple,padding:"2px 7px",borderRadius:8,fontWeight:600}}>⏳ Preventivo</span>}
             {r.preventivoAccettato&&<span style={{fontSize:11,background:"#ECFDF5",color:C.green,padding:"2px 7px",borderRadius:8,fontWeight:600}}>✅ Accettato</span>}
             {extraItems>0&&<span style={{fontSize:11,background:"#EFF6FF",color:"#1D4ED8",padding:"2px 7px",borderRadius:8,fontWeight:600}}>+{extraItems} oggetti</span>}
             {ddt&&<span style={{fontSize:11,background:"#F5F3FF",color:C.purple,padding:"2px 7px",borderRadius:8,fontWeight:500}}>{ddt.numero}</span>}
@@ -1170,8 +1170,8 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
             <IOSInput label="Data consegna" type="date" value={form.dataConsegna||""} onChange={e=>set("dataConsegna",e.target.value)}/>
           </div>
           <Toggle label="✅ Preventivo accettato dal cliente" value={form.preventivoAccettato} onChange={v=>set("preventivoAccettato",v)}/>
-          <Toggle label="⏳ Richiesta preventivo al fornitore" value={form.richiestaPreventivo} onChange={v=>{set("richiestaPreventivo",v);if(v)set("riparazioneInterna",false);}} sub="Segnala che serve preventivo dal riparatore esterno"/>
-          <Toggle label="🏠 Riparazione interna" value={form.riparazioneInterna} onChange={v=>{set("riparazioneInterna",v);if(v)set("richiestaPreventivo",false);}} sub="La riparazione viene gestita internamente, senza invio al riparatore"/>
+          <Toggle label="⏳ Richiesta preventivo" value={form.richiestaPreventivo} onChange={v=>set("richiestaPreventivo",v)} sub={form.riparazioneInterna?"Serve un preventivo prima di procedere con la riparazione interna":"Serve un preventivo dal riparatore esterno prima di procedere"}/>
+          <Toggle label="🏠 Riparazione interna" value={form.riparazioneInterna} onChange={v=>set("riparazioneInterna",v)} sub="La riparazione viene gestita internamente, senza invio al riparatore"/>
           <IOSTextarea label="Note interne" placeholder="Annotazioni per uso interno…" value={form.note||""} onChange={e=>set("note",e.target.value)}/>
         </div>
         <div style={{height:24}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(5)}/><Btn label="Rivedi riepilogo →" full onClick={()=>setStep(7)}/></div>
@@ -1201,7 +1201,7 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
           <IOSRow icon="💰" label="Preventivo" value={form.preventivo?form.preventivo+" €":"Da definire"}/>
           <IOSRow icon="✅" label="Prev. accettato" value={form.preventivoAccettato?"Sì":"No"}/>
           <IOSRow icon="🏠" label="Riparazione interna" value={form.riparazioneInterna?"Sì":"No"}/>
-          <IOSRow icon="⏳" label="Rich. prev. fornitore" value={form.richiestaPreventivo?"Sì":"No"}/>
+          <IOSRow icon="⏳" label="Richiesta preventivo" value={form.richiestaPreventivo?"Sì":"No"}/>
           <IOSRow icon="📅" label="Consegna prevista" value={fmtDate(form.dataConsegna)||"—"} last/>
         </IOSCard>
         <Btn label="✓ Crea riparazione e stampa etichette" full onClick={()=>onSave(form)}/>
@@ -1895,7 +1895,7 @@ function ReceiptModal({repair:r,customer:c,onClose}) {
     <Sheet onClose={onClose} title={"Etichette "+r.numero}>
       {r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:14,marginBottom:12}}/>}
       <IOSCard style={{marginBottom:16}}>
-        {[["N° Ricevuta",r.numero],["Cliente",c.nome+" "+c.cognome],["Oggetto",r.descrizione],r.tipoLavoro?["Lavoro",r.tipoLavoro]:null,r.mano?["Anello","Mano "+r.mano+" · "+r.dito]:null,["Data ricevuta",fmtDate(r.dataRicevuta)],["Consegna",fmtDate(r.dataConsegna)||"—"],["Preventivo",(r.preventivo?r.preventivo+" €":"Da definire")+(r.preventivoAccettato?" ✅":"")],r.richiestaPreventivo?["Prev. fornitore","⏳ Richiesto"]:null].filter(Boolean).map(([l,v],i,arr)=><IOSRow key={l} label={l} value={v} last={i===arr.length-1}/>)}
+        {[["N° Ricevuta",r.numero],["Cliente",c.nome+" "+c.cognome],["Oggetto",r.descrizione],r.tipoLavoro?["Lavoro",r.tipoLavoro]:null,r.mano?["Anello","Mano "+r.mano+" · "+r.dito]:null,["Data ricevuta",fmtDate(r.dataRicevuta)],["Consegna",fmtDate(r.dataConsegna)||"—"],["Preventivo",(r.preventivo?r.preventivo+" €":"Da definire")+(r.preventivoAccettato?" ✅":"")],r.richiestaPreventivo?["Prev. richiesto","⏳ Sì"]:null].filter(Boolean).map(([l,v],i,arr)=><IOSRow key={l} label={l} value={v} last={i===arr.length-1}/>)}
       </IOSCard>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
         <button onClick={doPrint} style={{background:"linear-gradient(135deg,#C9A227,#B8860B)",border:"none",borderRadius:18,padding:"18px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><span style={{fontSize:34}}>🖨️</span><span style={{fontSize:15,fontWeight:700,color:"white"}}>Stampa etichette</span></button>
@@ -2052,7 +2052,7 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
       </IOSCard>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         <Toggle label="✅ Preventivo accettato dal cliente" value={r.preventivoAccettato||false} onChange={()=>onTogglePrev(r)}/>
-        <Toggle label="⏳ Richiesta preventivo al fornitore" value={r.richiestaPreventivo||false} onChange={()=>onToggleRichPrev(r)}/>
+        <Toggle label="⏳ Richiesta preventivo" value={r.richiestaPreventivo||false} onChange={()=>onToggleRichPrev(r)} sub={r.riparazioneInterna?"Preventivo prima di procedere internamente":"Preventivo dal riparatore esterno"}/>
         <Toggle label="🏠 Riparazione interna" value={r.riparazioneInterna||false} onChange={()=>onToggleInterna(r)} sub="Gestita internamente, senza invio al riparatore"/>
       </div>
       <div style={{background:C.white,borderRadius:16,padding:14,marginBottom:12}}>
@@ -3684,7 +3684,7 @@ function MainApp() {
   };
 
   const handleToggleInterna=async repair=>{
-    const updated={...repair,riparazioneInterna:!repair.riparazioneInterna,...(!repair.riparazioneInterna?{richiestaPreventivo:false}:{})};
+    const updated={...repair,riparazioneInterna:!repair.riparazioneInterna};
     await withSync(()=>api.upsertRepair(updated));
     if(viewRepair?.id===repair.id)setViewRepair(updated);
   };
@@ -3867,7 +3867,7 @@ function MainApp() {
       const item=allItems[i];
       const numero=await api.getNextRepairNum();
       const id=uid();
-      const linkToken=(crypto.randomUUID??(() => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16))))();
+      const linkToken=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})();
       const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
       if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;}
       await api.upsertRepair(n);

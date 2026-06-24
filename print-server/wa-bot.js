@@ -118,16 +118,15 @@ async function handleAccepted(supabase, repairId) {
     }
 
     const riparatore = await fetchRiparatore(supabase, repairId);
-    if (!riparatore?.telefono) {
-      console.log(`ℹ️  Nessun telefono riparatore per ${repair.numero} — WA non inviato`);
-      return;
+    if (riparatore?.telefono) {
+      const phone = formatPhone(riparatore.telefono);
+      if (phone) {
+        await waClient.sendMessage(phone, buildAcceptMessage(repair, riparatore));
+        console.log(`✅ WA accettazione inviato a ${riparatore.nome} per ${repair.numero}`);
+      }
+    } else {
+      console.log(`ℹ️  Nessun telefono riparatore per ${repair.numero}`);
     }
-
-    const phone = formatPhone(riparatore.telefono);
-    if (!phone) return;
-
-    await waClient.sendMessage(phone, buildAcceptMessage(repair, riparatore));
-    console.log(`✅ WA accettazione inviato a ${riparatore.nome} per ${repair.numero}`);
 
     const shopTel = process.env.SHOP_WA_TEL;
     if (shopTel) {

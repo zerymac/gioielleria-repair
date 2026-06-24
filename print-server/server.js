@@ -7,12 +7,15 @@
  * Porta: 3001
  */
 
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+
 const express  = require('express');
 const puppeteer = require('puppeteer');
 const { exec }  = require('child_process');
 const fs        = require('fs');
 const path      = require('path');
 const os        = require('os');
+const { initWABot, isWAReady } = require('./wa-bot');
 
 const app  = express();
 const PORT = 3001;
@@ -160,6 +163,11 @@ app.post('/print', async (req, res) => {
   }
 });
 
+/* ── GET /wa-status — stato connessione WhatsApp ─────────────────── */
+app.get('/wa-status', (req, res) => {
+  res.json({ ok: isWAReady(), timestamp: new Date().toISOString() });
+});
+
 /* ── Avvio server ─────────────────────────────────────────────────── */
 app.listen(PORT, '0.0.0.0', async () => {
   console.log('\n╔══════════════════════════════════════╗');
@@ -180,4 +188,7 @@ app.listen(PORT, '0.0.0.0', async () => {
 
   /* Pre-avvia Chrome headless per ridurre latenza alla prima stampa */
   getBrowser().catch(e => console.warn('⚠️  Chrome headless:', e.message));
+
+  /* Avvia il bot WhatsApp */
+  initWABot();
 });
