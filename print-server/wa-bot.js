@@ -52,7 +52,8 @@ function buildAcceptMessage(repair, riparatore) {
     `Oggetto: ${repair.descrizione}`,
   ];
   if (repair.categoria) lines.push(`Categoria: ${repair.categoria}${repair.tipo_lavoro ? ' · ' + repair.tipo_lavoro : ''}`);
-  if (repair.problema)   lines.push(`Lavoro: ${repair.problema}`);
+  if (repair.problema)       lines.push(`Lavoro richiesto: ${repair.problema}`);
+  if (repair.nota_preventivo) lines.push(`Lavori da eseguire: ${repair.nota_preventivo}`);
   if (repair.preventivo) lines.push(`Preventivo al pubblico: ${repair.preventivo} €`);
   lines.push('', 'Può procedere con la riparazione.', '', SHOP_NOME, `Tel. ${SHOP_TEL}`);
   return lines.join('\n');
@@ -65,7 +66,8 @@ function buildDeclineRepairerMessage(repair, riparatore) {
     '',
     `Oggetto: ${repair.descrizione}`,
   ];
-  if (repair.problema)   lines.push(`Lavoro: ${repair.problema}`);
+  if (repair.problema)        lines.push(`Lavoro richiesto: ${repair.problema}`);
+  if (repair.nota_preventivo) lines.push(`Lavori da eseguire: ${repair.nota_preventivo}`);
   if (repair.preventivo) lines.push(`Preventivo al pubblico: ${repair.preventivo} €`);
   lines.push('', 'La preghiamo di non procedere e di restituire l\'oggetto.', '', SHOP_NOME, `Tel. ${SHOP_TEL}`);
   return lines.join('\n');
@@ -77,7 +79,8 @@ function buildAcceptShopMessage(repair) {
     '',
     `Oggetto: ${repair.descrizione}`,
   ];
-  if (repair.problema)   lines.push(`Lavoro: ${repair.problema}`);
+  if (repair.problema)        lines.push(`Lavoro richiesto: ${repair.problema}`);
+  if (repair.nota_preventivo) lines.push(`Lavori da eseguire: ${repair.nota_preventivo}`);
   if (repair.preventivo) lines.push(`Preventivo: ${repair.preventivo} €`);
   if (repair.cliente)    lines.push(`Cliente: ${repair.cliente}`);
   lines.push('', 'Può procedere con la riparazione.');
@@ -90,7 +93,8 @@ function buildDeclineShopMessage(repair) {
     '',
     `Oggetto: ${repair.descrizione}`,
   ];
-  if (repair.problema)   lines.push(`Lavoro: ${repair.problema}`);
+  if (repair.problema)        lines.push(`Lavoro richiesto: ${repair.problema}`);
+  if (repair.nota_preventivo) lines.push(`Lavori da eseguire: ${repair.nota_preventivo}`);
   if (repair.preventivo) lines.push(`Preventivo: ${repair.preventivo} €`);
   if (repair.cliente)    lines.push(`Cliente: ${repair.cliente}`);
   lines.push('', 'Contattare il cliente per concordare il ritiro o ulteriori informazioni.');

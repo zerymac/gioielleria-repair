@@ -100,9 +100,9 @@ const C = {
 
 /* ── API ── */
 const toCustomer = (r) => ({ id:r.id, nome:r.nome, cognome:r.cognome, telefono:r.telefono, telefonoPrefisso:r.telefono_prefisso||"+39", email:r.email, indirizzo:r.indirizzo, codiceFiscale:r.codice_fiscale, note:r.note });
-const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null });
+const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, marca:r.marca||null, referenza:r.referenza||null, notaPreventivo:r.nota_preventivo||null, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null, inGaranzia:r.in_garanzia||false });
 const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, ddtRientroNumero:r.ddt_rientro_numero||null, note:r.note });
-const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, createdAt:r.created_at });
+const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, operatore:r.operatore||null, createdAt:r.created_at });
 
 const api = {
   async getCustomers() {
@@ -124,10 +124,10 @@ const api = {
   async upsertRepair(r) {
     const clean=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
     const cs=(v)=>(v===""||v===undefined)?null:v;
-    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null };
+    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), marca:cs(r.marca), referenza:cs(r.referenza), nota_preventivo:cs(r.notaPreventivo), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null, in_garanzia:r.inGaranzia||false };
     const {error}=await supabase.from("repairs").upsert(payload);
     if(error){
-      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,...rest}=payload;await supabase.from("repairs").upsert(rest);}
+      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,...rest}=payload;await supabase.from("repairs").upsert(rest);}
       else console.error("upsertRepair:",error);
     }
   },
@@ -154,9 +154,9 @@ const api = {
   async upsertOrder(o) {
     const cleanNum=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
     const cs=(v)=>(v===""||v===undefined)?null:v;
-    const payload={ id:o.id, numero:o.numero, customer_id:cs(o.customerId), data_ordine:cs(o.dataOrdine), data_consegna_prevista:cs(o.dataConsegnaPrevista), stato:o.stato||"ordinato", prodotti:o.prodotti||[], acconto:cleanNum(o.acconto), note:cs(o.note), foto_url:cs(o.fotoUrl) };
+    const payload={ id:o.id, numero:o.numero, customer_id:cs(o.customerId), data_ordine:cs(o.dataOrdine), data_consegna_prevista:cs(o.dataConsegnaPrevista), stato:o.stato||"ordinato", prodotti:o.prodotti||[], acconto:cleanNum(o.acconto), note:cs(o.note), foto_url:cs(o.fotoUrl), operatore:cs(o.operatore) };
     const {error}=await supabase.from("orders").upsert(payload);
-    if(error&&error.code==="PGRST204"){const {foto_url:_f,...p2}=payload;const {error:e2}=await supabase.from("orders").upsert(p2);if(e2)console.error("upsertOrder:",e2);}
+    if(error&&error.code==="PGRST204"){const {foto_url:_f,operatore:_op,...p2}=payload;const {error:e2}=await supabase.from("orders").upsert(p2);if(e2)console.error("upsertOrder:",e2);}
     else if(error) console.error("upsertOrder:",error);
   },
   async updateOrderStatus(id,stato) { await supabase.from("orders").update({stato}).eq("id",id); },
@@ -567,7 +567,8 @@ function orderLabelHTML(order,c) {
 
 /* ── DDT HTML ── */
 function ddtHTML(ddt,items) {
-  const rows=items.map((r,i)=>`<tr><td>${i+1}</td><td><b>${r.numero}</b></td><td>${r.categoria}</td><td>${r.descrizione}</td><td>${r.problema||"—"}</td>${r.richiestaPreventivo?"<td style='color:#7C3AED;font-weight:600'>⏳ Richiesto</td>":"<td>—</td>"}</tr>`).join("");
+  const hasRef=items.some(r=>r.referenza);
+  const rows=items.map((r,i)=>`<tr><td>${i+1}</td><td><b>${r.numero}</b></td><td>${r.categoria}</td><td>${r.descrizione}</td><td>${r.materiali||"—"}</td>${hasRef?`<td>${r.referenza||"—"}</td>`:""}<td>${r.problema||"—"}</td>${r.richiestaPreventivo?"<td style='color:#7C3AED;font-weight:600'>⏳ Richiesto</td>":"<td>—</td>"}</tr>`).join("");
   return `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>DDT ${ddt.numero}</title><style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,Arial,sans-serif;padding:28px;font-size:12px;color:#1c1c1e}
@@ -641,6 +642,8 @@ function ddtHTML(ddt,items) {
           <th>Riparazione</th>
           <th>Categoria</th>
           <th>Descrizione</th>
+          <th>Materiali</th>
+          ${hasRef?"<th>Referenza</th>":""}
           <th>Problema / Lavoro</th>
           <th>Preventivo</th>
         </tr>
@@ -931,7 +934,7 @@ function RingDetailModal({form,set,onConfirm,onSkip}) {
 function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
   const TOTAL=7;
   const [step,setStep]=useState(0);
-  const [form,setForm]=useState({operatore:"",customerId:"",categoria:"",tipoLavoro:"",descrizione:"",materiali:"",problema:"",preventivo:"",preventivoAccettato:false,richiestaPreventivo:false,riparazioneInterna:false,dataConsegna:"",note:"",fotoUrl:"",fotoBlob:null,mano:"",dito:"",items:[]});
+  const [form,setForm]=useState({operatore:"",customerId:"",categoria:"",tipoLavoro:"",descrizione:"",materiali:"",marca:"",referenza:"",problema:"",preventivo:"",notaPreventivo:"",preventivoAccettato:false,richiestaPreventivo:false,riparazioneInterna:false,inGaranzia:false,dataConsegna:"",note:"",fotoUrl:"",fotoBlob:null,mano:"",dito:"",items:[]});
   const [search,setSearch]=useState("");
   const [showNew,setShowNew]=useState(false);
   const [newC,setNewC]=useState({nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",codiceFiscale:""});
@@ -974,8 +977,8 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
   };
 
   const addCurrentItem=()=>{
-    const item={categoria:form.categoria,tipoLavoro:form.tipoLavoro,descrizione:form.descrizione,materiali:form.materiali,problema:form.problema,mano:form.mano,dito:form.dito};
-    setForm(f=>({...f,items:[...(f.items||[]),item],categoria:"",tipoLavoro:"",descrizione:"",materiali:"",problema:"",mano:"",dito:""}));
+    const item={categoria:form.categoria,tipoLavoro:form.tipoLavoro,descrizione:form.descrizione,materiali:form.materiali,marca:form.marca,referenza:form.referenza,problema:form.problema,mano:form.mano,dito:form.dito};
+    setForm(f=>({...f,items:[...(f.items||[]),item],categoria:"",tipoLavoro:"",descrizione:"",materiali:"",marca:"",referenza:"",problema:"",mano:"",dito:""}));
     setStep(2);
   };
 
@@ -1145,6 +1148,10 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <IOSTextarea label="Descrizione oggetto *" placeholder="Es. Anello in oro giallo con solitario brillante…" value={form.descrizione} onChange={e=>set("descrizione",e.target.value)}/>
           <IOSInput label="Materiali (opzionale)" placeholder="Es. Oro 18k, argento 925…" value={form.materiali||""} onChange={e=>set("materiali",e.target.value)}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <IOSInput label="Marca (opzionale)" placeholder="Es. Bulgari, Rolex…" value={form.marca||""} onChange={e=>set("marca",e.target.value)}/>
+            <IOSInput label="Referenza (opzionale)" placeholder="Es. AB1234" value={form.referenza||""} onChange={e=>set("referenza",e.target.value)}/>
+          </div>
         </div>
         <div style={{height:24}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(3)}/><Btn label="Avanti →" disabled={!form.descrizione.trim()} full onClick={()=>setStep(5)}/></div>
       </div>}
@@ -1169,9 +1176,11 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
             <IOSInput label="Preventivo (€)" type="number" placeholder="0.00" value={form.preventivo||""} onChange={e=>set("preventivo",e.target.value)}/>
             <IOSInput label="Data consegna" type="date" value={form.dataConsegna||""} onChange={e=>set("dataConsegna",e.target.value)}/>
           </div>
+          <IOSTextarea label="Lavori da eseguire (opzionale)" placeholder="Es. Sostituzione maglia, pulizia e lucidatura…" value={form.notaPreventivo||""} onChange={e=>set("notaPreventivo",e.target.value)}/>
           <Toggle label="✅ Preventivo accettato dal cliente" value={form.preventivoAccettato} onChange={v=>set("preventivoAccettato",v)}/>
           <Toggle label="⏳ Richiesta preventivo" value={form.richiestaPreventivo} onChange={v=>set("richiestaPreventivo",v)} sub={form.riparazioneInterna?"Serve un preventivo prima di procedere con la riparazione interna":"Serve un preventivo dal riparatore esterno prima di procedere"}/>
           <Toggle label="🏠 Riparazione interna" value={form.riparazioneInterna} onChange={v=>set("riparazioneInterna",v)} sub="La riparazione viene gestita internamente, senza invio al riparatore"/>
+          <Toggle label="🛡️ In garanzia" value={form.inGaranzia} onChange={v=>set("inGaranzia",v)} sub="L'oggetto è in garanzia"/>
           <IOSTextarea label="Note interne" placeholder="Annotazioni per uso interno…" value={form.note||""} onChange={e=>set("note",e.target.value)}/>
         </div>
         <div style={{height:24}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(5)}/><Btn label="Rivedi riepilogo →" full onClick={()=>setStep(7)}/></div>
@@ -1189,6 +1198,7 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
           {form.mano&&<IOSRow icon="💍" label="Anello" value={`Mano ${form.mano} · ${form.dito}`}/>}
           <IOSRow icon="📝" label="Oggetto" sub={form.descrizione}/>
           {form.materiali&&<IOSRow icon="🪙" label="Materiali" value={form.materiali}/>}
+          {(form.marca||form.referenza)&&<IOSRow icon="🏷️" label="Marca / Ref." value={[form.marca,form.referenza].filter(Boolean).join(" · ")}/>}
           <IOSRow icon="🔍" label="Problema" sub={form.problema} last/>
         </IOSCard>
         {form.items?.length>0&&(
@@ -1199,8 +1209,10 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
         )}
         <IOSCard style={{marginBottom:28}}>
           <IOSRow icon="💰" label="Preventivo" value={form.preventivo?form.preventivo+" €":"Da definire"}/>
+          {form.notaPreventivo&&<IOSRow icon="📝" label="Lavori da eseguire" sub={form.notaPreventivo}/>}
           <IOSRow icon="✅" label="Prev. accettato" value={form.preventivoAccettato?"Sì":"No"}/>
           <IOSRow icon="🏠" label="Riparazione interna" value={form.riparazioneInterna?"Sì":"No"}/>
+          {form.inGaranzia&&<IOSRow icon="🛡️" label="In garanzia" value="Sì"/>}
           <IOSRow icon="⏳" label="Richiesta preventivo" value={form.richiestaPreventivo?"Sì":"No"}/>
           <IOSRow icon="📅" label="Consegna prevista" value={fmtDate(form.dataConsegna)||"—"} last/>
         </IOSCard>
@@ -1917,7 +1929,7 @@ function ReceiptModal({repair:r,customer:c,onClose}) {
 }
 
 /* ── Repair Detail ── */
-function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,onTogglePrev,onToggleRichPrev,onToggleInterna,onDelete,onDateChange,onConsegna,onPreventivoChange,onAccontoChange,onSpesaChange,onPrezzoFinaleChange}) {
+function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,onTogglePrev,onToggleRichPrev,onToggleInterna,onToggleGaranzia,onDelete,onDateChange,onConsegna,onPreventivoChange,onAccontoChange,onSpesaChange,onPrezzoFinaleChange,onMarcaRefChange,onNotaPreventivoChange}) {
   const [confirmDelete,setConfirmDelete]=useState(false);
   const [editPrev,setEditPrev]=useState(false);
   const [prevInput,setPrevInput]=useState("");
@@ -1927,6 +1939,15 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   const [spesaInput,setSpesaInput]=useState("");
   const [editFinale,setEditFinale]=useState(false);
   const [finaleInput,setFinaleInput]=useState("");
+  const [editMarcaRef,setEditMarcaRef]=useState(false);
+  const [marcaInput,setMarcaInput]=useState("");
+  const [refInput,setRefInput]=useState("");
+  const startEditMarcaRef=()=>{setMarcaInput(r.marca||"");setRefInput(r.referenza||"");setEditMarcaRef(true);};
+  const saveMarcaRef=()=>{onMarcaRefChange&&onMarcaRefChange(r.id,marcaInput.trim()||null,refInput.trim()||null);setEditMarcaRef(false);};
+  const [editNota,setEditNota]=useState(false);
+  const [notaInput,setNotaInput]=useState("");
+  const startEditNota=()=>{setNotaInput(r.notaPreventivo||"");setEditNota(true);};
+  const saveNota=()=>{onNotaPreventivoChange&&onNotaPreventivoChange(r.id,notaInput.trim()||null);setEditNota(false);};
   const catIcon=CATS.find(x=>x.id===r.categoria)?.icon||"💍";
   const startEditPrev=()=>{setPrevInput(r.preventivo!=null?String(r.preventivo):"");setEditPrev(true);};
   const savePrev=()=>{onPreventivoChange(r.id,prevInput===""?null:parseFloat(prevInput)||null);setEditPrev(false);};
@@ -1957,6 +1978,26 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
           <WABtn customer={c} size={32}/>
         </div>}
         {r.materiali&&<IOSRow icon="🪙" label="Materiali" value={r.materiali}/>}
+        {editMarcaRef
+          ?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🏷️</span>
+              <input autoFocus placeholder="Marca" value={marcaInput} onChange={e=>setMarcaInput(e.target.value)}
+                style={{flex:1,fontSize:14,border:"1px solid #C9A227",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif"}}/>
+              <input placeholder="Referenza" value={refInput} onChange={e=>setRefInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")saveMarcaRef();}}
+                style={{flex:1,fontSize:14,border:"1px solid #C9A227",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif"}}/>
+              <button onClick={saveMarcaRef} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 10px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✓</button>
+              <button onClick={()=>setEditMarcaRef(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✕</button>
+            </div>
+          :<div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🏷️</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>Marca / Referenza</div>
+                <div style={{fontSize:15,color:(r.marca||r.referenza)?C.label:C.secondary,fontWeight:(r.marca||r.referenza)?600:400}}>{[r.marca,r.referenza].filter(Boolean).join(" · ")||"Non specificata"}</div>
+              </div>
+              <button onClick={startEditMarcaRef} style={{background:"#F5F3FF",border:"none",borderRadius:8,padding:"5px 9px",color:C.purple,fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
         {r.problema&&<IOSRow icon="🔍" label="Problema" sub={r.problema} last/>}
       </IOSCard>
       <IOSCard style={{marginBottom:12}}>
@@ -2027,6 +2068,24 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
                 <button onClick={startEditPrev} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
               </div>
         )}
+        {editNota
+          ?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>📝</span>
+              <input autoFocus placeholder="Es. Sostituzione maglia, pulizia…" value={notaInput} onChange={e=>setNotaInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")saveNota();}}
+                style={{flex:1,fontSize:14,border:"1px solid #C9A227",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif"}}/>
+              <button onClick={saveNota} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 10px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✓</button>
+              <button onClick={()=>setEditNota(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✕</button>
+            </div>
+          :<div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>📝</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>Lavori da eseguire</div>
+                <div style={{fontSize:15,color:r.notaPreventivo?C.label:C.secondary,fontWeight:r.notaPreventivo?600:400}}>{r.notaPreventivo||"Non specificato"}</div>
+              </div>
+              <button onClick={startEditNota} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
         {editAcc
           ?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
               <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>✅</span>
@@ -2054,6 +2113,7 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
         <Toggle label="✅ Preventivo accettato dal cliente" value={r.preventivoAccettato||false} onChange={()=>onTogglePrev(r)}/>
         <Toggle label="⏳ Richiesta preventivo" value={r.richiestaPreventivo||false} onChange={()=>onToggleRichPrev(r)} sub={r.riparazioneInterna?"Preventivo prima di procedere internamente":"Preventivo dal riparatore esterno"}/>
         <Toggle label="🏠 Riparazione interna" value={r.riparazioneInterna||false} onChange={()=>onToggleInterna(r)} sub="Gestita internamente, senza invio al riparatore"/>
+        <Toggle label="🛡️ In garanzia" value={r.inGaranzia||false} onChange={()=>onToggleGaranzia&&onToggleGaranzia(r)} sub="L'oggetto è in garanzia"/>
       </div>
       <div style={{background:C.white,borderRadius:16,padding:14,marginBottom:12}}>
         <div style={{fontSize:12,fontWeight:700,color:C.secondary,marginBottom:10}}>CAMBIA STATO</div>
@@ -2967,7 +3027,7 @@ function OrderStatusBadge({stato}) {
   return <span style={{background:s.bg,color:s.color,borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:700}}>{s.label}</span>;
 }
 
-function OrderCard({order,customers,onView}) {
+function OrderCard({order,customers,onView,onConsegna}) {
   const c=customers.find(x=>x.id===order.customerId);
   const s=ORDER_STATUSES[order.stato]||ORDER_STATUSES.ordinato;
   const totProdotti=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
@@ -2975,23 +3035,38 @@ function OrderCard({order,customers,onView}) {
   const isOverdue=order.stato!=="consegnato"&&order.stato!=="annullato"&&earliestDate&&earliestDate<today();
   const totAcconto=order.prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
   return (
-    <div onClick={()=>onView(order)} style={{background:C.white,borderRadius:16,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,.08)",cursor:"pointer",borderLeft:`4px solid ${s.color}`,opacity:order.stato==="annullato"?.6:1}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-        <div style={{fontWeight:800,fontSize:15,color:C.label}}>{order.numero}</div>
-        <OrderStatusBadge stato={order.stato}/>
+    <div style={{background:C.white,borderRadius:16,marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,.08)",borderLeft:`4px solid ${s.color}`,opacity:order.stato==="annullato"?.6:1}}>
+      <div onClick={()=>onView(order)} style={{padding:"14px 16px",cursor:"pointer"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+          <div style={{fontWeight:800,fontSize:15,color:C.label}}>{order.numero}</div>
+          <OrderStatusBadge stato={order.stato}/>
+        </div>
+        {c&&<div style={{fontSize:14,color:C.label,marginBottom:4}}>{c.nome} {c.cognome}</div>}
+        {order.prodotti.length>0&&<div style={{marginBottom:4}}>
+          {order.prodotti.slice(0,3).map((p,i)=>(
+            <div key={i} style={{fontSize:13,color:C.label,lineHeight:1.4}}>
+              {p.quantita>1?`${p.quantita}× `:""}{p.descrizione}{p.marca?<span style={{color:C.secondary}}> · {p.marca}</span>:null}
+            </div>
+          ))}
+          {order.prodotti.length>3&&<div style={{fontSize:12,color:C.secondary}}>+{order.prodotti.length-3} altri</div>}
+          {totProdotti>0&&<div style={{fontSize:12,color:C.secondary,marginTop:2}}>{totProdotti.toFixed(2)} €</div>}
+        </div>}
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          {order.dataOrdine&&<span style={{fontSize:12,color:C.secondary}}>Ord: {fmtDate(order.dataOrdine)}</span>}
+          {earliestDate&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":C.secondary,fontWeight:isOverdue?700:400}}>{isOverdue?"⚠️ ":""}Cons: {fmtDate(earliestDate)}</span>}
+          {totAcconto>0&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {totAcconto.toFixed(2)} €</span>}
+        </div>
       </div>
-      {c&&<div style={{fontSize:14,color:C.label,marginBottom:4}}>{c.nome} {c.cognome}</div>}
-      {order.prodotti.length>0&&<div style={{fontSize:13,color:C.secondary,marginBottom:4}}>{order.prodotti.length} articol{order.prodotti.length===1?"o":"i"}{totProdotti>0?` · ${totProdotti.toFixed(2)} €`:""}</div>}
-      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-        {order.dataOrdine&&<span style={{fontSize:12,color:C.secondary}}>Ord: {fmtDate(order.dataOrdine)}</span>}
-        {earliestDate&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":C.secondary,fontWeight:isOverdue?700:400}}>{isOverdue?"⚠️ ":""}Cons: {fmtDate(earliestDate)}</span>}
-        {totAcconto>0&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {totAcconto.toFixed(2)} €</span>}
-      </div>
+      {order.stato==="arrivato"&&onConsegna&&(
+        <div style={{borderTop:"1px solid #F2F2F7",padding:"10px 16px"}}>
+          <button onClick={e=>{e.stopPropagation();onConsegna(order);}} style={{width:"100%",background:"linear-gradient(135deg,#059669,#047857)",border:"none",borderRadius:10,padding:"10px",color:"white",fontSize:14,fontWeight:700,cursor:"pointer"}}>Consegna al cliente</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function OrdersPage({orders,customers,onView,onNew}) {
+function OrdersPage({orders,customers,onView,onNew,onConsegna}) {
   const [q,setQ]=useState("");
   const [filterStato,setFilterStato]=useState("tutti");
 
@@ -3042,21 +3117,36 @@ function OrdersPage({orders,customers,onView,onNew}) {
       <button onClick={onNew} style={{width:"100%",background:"linear-gradient(135deg,#3B82F6,#2563EB)",border:"none",borderRadius:14,padding:"13px",color:"white",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:14,boxShadow:"0 2px 8px rgba(59,130,246,.35)"}}>+ Nuovo Ordine</button>
 
       {filtered.length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:C.secondary}}>{orders.length===0?"Nessun ordine.":"Nessun risultato."}</div>}
-      {filtered.map(o=><OrderCard key={o.id} order={o} customers={customers} onView={onView}/>)}
+      {filtered.map(o=><OrderCard key={o.id} order={o} customers={customers} onView={onView} onConsegna={onConsegna}/>)}
     </div>
   );
 }
 
 function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
-  const TOTAL=4;
+  const TOTAL=7;
   const isEdit=!!order?.id;
-  const [step,setStep]=useState(1);
+  const [step,setStep]=useState(isEdit?6:0);
   const [form,setForm]=useState({
+    id:order?.id||uid(),
     customerId:order?.customerId||"",
     dataOrdine:order?.dataOrdine||today(),
-    stato:order?.stato||"da_ordinare",
-    prodotti:order?.prodotti||[],
+    operatore:order?.operatore||"",
     note:order?.note||"",
+    prodotti:order?.prodotti||[],
+    categoria:"",
+    descrizione:"",
+    fornitore:"",
+    marca:"",
+    referenza:"",
+    quantita:1,
+    prezzoVendita:"",
+    prezzoAcquisto:"",
+    acconto:"",
+    dataConsegnaPrevista:"",
+    notaProdotto:"",
+    statoProdotto:"da_ordinare",
+    fotoUrl:null,
+    fotoBlob:null,
   });
   const [search,setSearch]=useState(()=>{
     if(order?.customerId){const c=customers.find(x=>x.id===order.customerId);return c?`${c.nome} ${c.cognome}`:""}
@@ -3064,63 +3154,96 @@ function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
   });
   const [showNew,setShowNew]=useState(false);
   const [newC,setNewC]=useState({nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",codiceFiscale:""});
-  const emptyProd={descrizione:"",categoria:"",fornitore:"",quantita:1,prezzoAcquisto:"",prezzoVendita:"",note:"",stato:"da_ordinare",acconto:"",dataConsegnaPrevista:"",fotoUrl:null};
-  const [prodForm,setProdForm]=useState(emptyProd);
-  const [showProd,setShowProd]=useState(!isEdit);
-  const [editingProdId,setEditingProdId]=useState(null);
-  const [prodFotoPreview,setProdFotoPreview]=useState(null);
+  const fotoRef=useRef();
+  const [imgPreview,setImgPreview]=useState(null);
   const [saving,setSaving]=useState(false);
-  const prodFotoRef=useRef();
 
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const selC=customers.find(c=>c.id===form.customerId);
   const filtered=customers.filter(c=>matchCustomer(c,search));
-  const totVendita=form.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
 
-  const handleProdFoto=async(e)=>{
+  const OPERATORS=[
+    {id:"Adri",  label:"Adri",  color:"#7C3AED", bg:"#F3EFFE"},
+    {id:"Massi", label:"Massi", color:"#2563EB", bg:"#EFF6FF"},
+    {id:"Jenny", label:"Jenny", color:"#DB2777", bg:"#FDF2F8"},
+    {id:"Manu",  label:"Manu",  color:"#059669", bg:"#ECFDF5"},
+  ];
+
+  const handleFoto=async(e)=>{
     const file=e.target.files?.[0];if(!file)return;
-    const blob=await compressImage(file,400,0.5);
+    const blob=await compressImage(file,800,0.7);
     const dataUrl=await blobToDataURL(blob);
-    setProdFotoPreview(dataUrl);
+    setImgPreview(dataUrl);
+    set("fotoUrl",dataUrl);
+    set("fotoBlob",blob);
   };
 
-  const saveProd=(closeAfter=false)=>{
-    if(!prodForm.descrizione.trim())return;
-    const parsed={...prodForm,quantita:parseInt(prodForm.quantita)||1,prezzoAcquisto:parseFloat(prodForm.prezzoAcquisto)||null,prezzoVendita:parseFloat(prodForm.prezzoVendita)||null,acconto:parseFloat(prodForm.acconto)||null,dataConsegnaPrevista:prodForm.dataConsegnaPrevista||null,fotoUrl:prodFotoPreview||prodForm.fotoUrl||null};
-    if(editingProdId){
-      const eid=editingProdId;
-      setForm(f=>({...f,prodotti:f.prodotti.map(p=>p.id===eid?{...p,...parsed}:p)}));
-      setEditingProdId(null);
-      setProdFotoPreview(null);
-      setShowProd(false);
-    } else {
-      const newProd={id:uid(),...parsed};
-      setForm(f=>({...f,prodotti:[...f.prodotti,newProd]}));
-      setProdForm(emptyProd);
-      setProdFotoPreview(null);
-      if(closeAfter) setShowProd(false);
-    }
+  const buildCurrentProd=()=>form.descrizione?.trim()?{
+    id:uid(),
+    categoria:form.categoria,descrizione:form.descrizione,
+    fornitore:form.fornitore||null,marca:form.marca||null,referenza:form.referenza||null,
+    quantita:parseInt(form.quantita)||1,
+    prezzoVendita:parseFloat(form.prezzoVendita)||null,
+    prezzoAcquisto:parseFloat(form.prezzoAcquisto)||null,
+    acconto:parseFloat(form.acconto)||null,
+    dataConsegnaPrevista:form.dataConsegnaPrevista||null,
+    note:form.notaProdotto||null,
+    stato:form.statoProdotto||"da_ordinare",
+    fotoUrl:form.fotoUrl||null,
+  }:null;
+
+  const addCurrentProduct=()=>{
+    const prod=buildCurrentProd();
+    if(!prod)return;
+    setForm(f=>({...f,
+      prodotti:[...f.prodotti,prod],
+      categoria:"",descrizione:"",fornitore:"",marca:"",referenza:"",
+      quantita:1,prezzoVendita:"",prezzoAcquisto:"",acconto:"",
+      dataConsegnaPrevista:"",notaProdotto:"",statoProdotto:"da_ordinare",
+      fotoUrl:null,fotoBlob:null,
+    }));
+    setImgPreview(null);
+    setStep(2);
   };
-  const startEditProd=(p)=>{
-    setProdForm({descrizione:p.descrizione||"",categoria:p.categoria||"",fornitore:p.fornitore||"",quantita:p.quantita||1,prezzoAcquisto:p.prezzoAcquisto||"",prezzoVendita:p.prezzoVendita||"",note:p.note||"",stato:p.stato||"da_ordinare",acconto:p.acconto||"",dataConsegnaPrevista:p.dataConsegnaPrevista||"",fotoUrl:p.fotoUrl||null});
-    setProdFotoPreview(p.fotoUrl||null);
-    setEditingProdId(p.id);
-    setShowProd(true);
-  };
-  const cancelProd=()=>{setProdForm(emptyProd);setEditingProdId(null);setShowProd(false);setProdFotoPreview(null);};
+
   const removeProd=id=>setForm(f=>({...f,prodotti:f.prodotti.filter(p=>p.id!==id)}));
 
   const handleSave=async()=>{
     if(saving)return;
     setSaving(true);
-    await onSave({...order,...form,id:order?.id||uid()});
+    const currProd=buildCurrentProd();
+    const allProdotti=[...form.prodotti,...(currProd?[currProd]:[])];
+    const stato=allProdotti.length===0?"da_ordinare":
+      allProdotti.every(p=>p.stato==="consegnato")?"consegnato":
+      allProdotti.some(p=>p.stato==="arrivato")?"arrivato":
+      allProdotti.some(p=>p.stato==="ordinato")?"ordinato":"da_ordinare";
+    const earliestDate=allProdotti.map(p=>p.dataConsegnaPrevista).filter(Boolean).sort()[0]||null;
+    await onSave({...form,prodotti:allProdotti,stato,dataConsegnaPrevista:earliestDate,id:form.id});
     setSaving(false);
   };
 
-  const stepTitles=["","👤 Cliente","🛒 Articoli","📅 Date e pagamento","✅ Riepilogo"];
+  const stepTitles=["👷 Operatore","👤 Cliente","💎 Categoria","📝 Articolo","💰 Prezzi","📅 Date","✅ Riepilogo"];
 
   return (
-    <FullScreen onClose={onClose} title={stepTitles[step]} step={step} totalSteps={TOTAL}>
+    <FullScreen onClose={onClose} title={stepTitles[step]} step={step+1} totalSteps={TOTAL}>
+
+      {/* STEP 0 — Operatore */}
+      {step===0&&<div>
+        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Chi prende l'ordine?</div>
+        <div style={{fontSize:15,color:C.secondary,marginBottom:28}}>Seleziona l'operatore</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:32}}>
+          {OPERATORS.map(op=>{
+            const sel=form.operatore===op.id;
+            return (
+              <button key={op.id} onClick={()=>set("operatore",op.id)} style={{background:sel?op.color:op.bg,border:sel?`2px solid ${op.color}`:"2px solid transparent",borderRadius:20,padding:"28px 16px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:12,transition:"all .2s",boxShadow:sel?`0 6px 20px ${op.color}44`:"0 1px 4px rgba(0,0,0,.08)"}}>
+                <div style={{width:64,height:64,borderRadius:32,background:sel?"rgba(255,255,255,.25)":op.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:900,color:"white"}}>{op.label[0]}</div>
+                <div style={{fontSize:18,fontWeight:700,color:sel?"white":op.color}}>{op.label}</div>
+              </button>
+            );
+          })}
+        </div>
+        <Btn label="Avanti →" disabled={!form.operatore} full onClick={()=>setStep(1)}/>
+      </div>}
 
       {/* STEP 1 — Cliente */}
       {step===1&&<div>
@@ -3148,174 +3271,172 @@ function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
           </IOSCard>
         )}
         {filtered.length>0&&<IOSCard>{filtered.slice(0,10).map((c,i,arr)=>(
-          <button key={c.id} onClick={()=>{set("customerId",c.id);setStep(2);}} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:form.customerId===c.id?"#EFF6FF":"transparent",borderBottom:i<arr.length-1?"1px solid #F2F2F7":"none",cursor:"pointer",border:"none",textAlign:"left"}}>
-            <div style={{width:40,height:40,borderRadius:20,background:form.customerId===c.id?"#3B82F6":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:form.customerId===c.id?"white":"#8E8E93",flexShrink:0}}>{c.nome?.[0]}{c.cognome?.[0]}</div>
+          <button key={c.id} onClick={()=>{set("customerId",c.id);setStep(2);}} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:form.customerId===c.id?"#FDF6DC":"transparent",borderBottom:i<arr.length-1?"1px solid #F2F2F7":"none",cursor:"pointer",border:"none",textAlign:"left"}}>
+            <div style={{width:40,height:40,borderRadius:20,background:form.customerId===c.id?"#B8860B":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:form.customerId===c.id?"white":"#8E8E93",flexShrink:0}}>{c.nome?.[0]}{c.cognome?.[0]}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:15,fontWeight:600,color:C.label}}>{c.nome} {c.cognome}</div>
               <div style={{fontSize:13,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayPhone(c)||c.email||"—"}</div>
             </div>
-            {form.customerId===c.id&&<span style={{color:"#3B82F6",fontSize:20}}>✓</span>}
+            {form.customerId===c.id&&<span style={{color:"#B8860B",fontSize:20}}>✓</span>}
           </button>
         ))}</IOSCard>}
-        <div style={{height:20}}/>
-        <Btn label="Avanti →" disabled={!form.customerId} full onClick={()=>setStep(2)}/>
+        <div style={{height:20}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(0)}/><Btn label="Avanti →" disabled={!form.customerId} full onClick={()=>setStep(2)}/></div>
       </div>}
 
-      {/* STEP 2 — Articoli */}
+      {/* STEP 2 — Categoria */}
       {step===2&&<div>
-        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Articoli ordinati</div>
-        <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>{form.prodotti.length===0?"Inserisci il primo articolo":"Articoli aggiunti: "+form.prodotti.length+" · aggiungi altri o vai avanti"}</div>
-
+        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Che tipo di prodotto?</div>
+        <div style={{fontSize:15,color:C.secondary,marginBottom:16}}>Seleziona la categoria</div>
         {form.prodotti.length>0&&(
-          <IOSCard style={{marginBottom:14}}>
+          <div style={{background:"#F0FFF4",borderRadius:14,padding:12,marginBottom:14,border:"1px solid #BBF7D0"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#059669",marginBottom:6}}>✅ Articoli già aggiunti ({form.prodotti.length})</div>
             {form.prodotti.map((p,i)=>(
-              <div key={p.id||i} style={{padding:"12px 16px",borderBottom:i<form.prodotti.length-1?"1px solid #F2F2F7":"none",opacity:editingProdId&&editingProdId!==p.id?0.4:1}}>
-                {p.fotoUrl&&<img src={p.fotoUrl} alt="foto" style={{width:"100%",maxHeight:100,objectFit:"cover",borderRadius:10,marginBottom:8}}/>}
-                <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
-                    {(p.categoria||p.fornitore)&&<div style={{fontSize:13,color:C.secondary}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
-                    {p.prezzoVendita&&<div style={{fontSize:13,color:"#059669",marginTop:2}}>Vendita: {p.prezzoVendita} €</div>}
-                    {p.note&&<div style={{fontSize:12,color:C.secondary,fontStyle:"italic",marginTop:2}}>{p.note}</div>}
-                    <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                      {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(p.dataConsegnaPrevista)}</span>}
-                      {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 Acc: {p.acconto} €</span>}
-                    </div>
-                  </div>
-                  <button onClick={()=>startEditProd(p)} style={{background:"#EFF6FF",border:"none",borderRadius:8,padding:"5px 9px",color:"#3B82F6",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
-                  <button onClick={()=>removeProd(p.id)} style={{background:"#FFF1F2",border:"none",borderRadius:8,padding:"5px 9px",color:C.red,fontSize:13,cursor:"pointer",flexShrink:0}}>✕</button>
-                </div>
+              <div key={p.id||i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:i<form.prodotti.length-1?"1px solid #BBF7D0":"none"}}>
+                <span>{CATS.find(c=>c.id===p.categoria)?.icon||"📦"}</span>
+                <div style={{flex:1,fontSize:13,color:C.label}}>{p.categoria?p.categoria+" · ":""}{p.descrizione?.slice(0,40)||"—"}</div>
+                <button onClick={()=>removeProd(p.id)} style={{background:"none",border:"none",color:C.red,fontSize:16,cursor:"pointer"}}>✕</button>
               </div>
             ))}
-          </IOSCard>
+          </div>
         )}
-
-        {!showProd&&!editingProdId&&(
-          <button onClick={()=>setShowProd(true)} style={{width:"100%",border:"2px dashed #3B82F6",borderRadius:16,padding:14,background:"#EFF6FF",color:"#3B82F6",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"-apple-system,sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:14}}>
-            <span style={{fontSize:22}}>➕</span> Aggiungi articolo
-          </button>
-        )}
-
-        {showProd&&(
-          <IOSCard style={{marginBottom:14}}>
-            <div style={{padding:"16px 16px 0",display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{fontSize:16,fontWeight:700,color:C.label}}>{editingProdId?"Modifica articolo":"Nuovo articolo"}</div>
-              <IOSInput label="Descrizione *" placeholder="es. Anello oro 18kt misura 14" value={prodForm.descrizione} onChange={e=>setProdForm(f=>({...f,descrizione:e.target.value}))} autoFocus/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <IOSInput label="Categoria" placeholder="es. Anelli" value={prodForm.categoria} onChange={e=>setProdForm(f=>({...f,categoria:e.target.value}))}/>
-                <IOSInput label="Fornitore" placeholder="es. Oro Vivo" value={prodForm.fornitore} onChange={e=>setProdForm(f=>({...f,fornitore:e.target.value}))}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <IOSInput label="Qtà" type="number" min="1" value={prodForm.quantita} onChange={e=>setProdForm(f=>({...f,quantita:e.target.value}))}/>
-                <IOSInput label="Vend. €" type="number" step="0.01" placeholder="0.00" value={prodForm.prezzoVendita} onChange={e=>setProdForm(f=>({...f,prezzoVendita:e.target.value}))}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <IOSInput label="Consegna prevista" type="date" value={prodForm.dataConsegnaPrevista} onChange={e=>setProdForm(f=>({...f,dataConsegnaPrevista:e.target.value}))}/>
-                <IOSInput label="Acconto (€)" type="number" step="0.01" placeholder="0.00" value={prodForm.acconto} onChange={e=>setProdForm(f=>({...f,acconto:e.target.value}))}/>
-              </div>
-              <IOSInput label="Note articolo" placeholder="Misura, colore, incisione…" value={prodForm.note} onChange={e=>setProdForm(f=>({...f,note:e.target.value}))}/>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>FOTO ARTICOLO</div>
-                <button onClick={()=>prodFotoRef.current.click()} style={{width:"100%",border:"2px dashed #C9A227",borderRadius:12,padding:prodFotoPreview?0:"14px",background:"#FDF6DC",cursor:"pointer",overflow:"hidden",minHeight:56,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {prodFotoPreview?<img src={prodFotoPreview} alt="ref" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:10}}/>:<div style={{textAlign:"center"}}><div style={{fontSize:24}}>📷</div><div style={{fontSize:13,color:"#B8860B",fontWeight:600,marginTop:2}}>Scatta o carica foto</div></div>}
-                </button>
-                <input ref={prodFotoRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleProdFoto}/>
-                {prodFotoPreview&&<button onClick={()=>setProdFotoPreview(null)} style={{marginTop:4,background:"none",border:"none",color:C.red,fontSize:13,cursor:"pointer",padding:0}}>✕ Rimuovi foto</button>}
-              </div>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>STATO ARTICOLO</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {Object.entries(ORDER_STATUSES).filter(([k])=>k!=="annullato").map(([k,v])=>(
-                    <button key={k} onClick={()=>setProdForm(f=>({...f,stato:k}))} style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${prodForm.stato===k?v.color:"transparent"}`,background:prodForm.stato===k?v.bg:"#E5E5EA",color:prodForm.stato===k?v.color:C.label,fontSize:12,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
-                  ))}
-                </div>
-              </div>
-              <div style={{display:"flex",gap:8,paddingBottom:16}}>
-                {!editingProdId&&<Btn label="➕ Aggiungi articolo" full disabled={!prodForm.descrizione.trim()} onClick={()=>saveProd(false)}/>}
-                <Btn label={editingProdId?"✓ Salva modifiche":"💾 Salva"} full disabled={!prodForm.descrizione.trim()} onClick={()=>saveProd(true)}/>
-                {editingProdId&&<Btn label="Annulla" variant="secondary" full onClick={cancelProd}/>}
-              </div>
-            </div>
-          </IOSCard>
-        )}
-
-        {form.prodotti.length>0&&totVendita>0&&(
-          <IOSCard style={{marginBottom:14}}>
-            <div style={{padding:"10px 16px"}}>
-              <IOSRow icon="💰" label="Totale vendita" value={`${totVendita.toFixed(2)} €`} last/>
-            </div>
-          </IOSCard>
-        )}
-
-        <div style={{height:8}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+          {CATS.map(cat=>(
+            <button key={cat.id} onClick={()=>{set("categoria",cat.id);setStep(3);}} style={{width:"100%",background:form.categoria===cat.id?"linear-gradient(135deg,#C9A227,#B8860B)":"white",border:"none",borderRadius:22,padding:"22px 16px",textAlign:"center",cursor:"pointer",boxShadow:form.categoria===cat.id?"0 6px 20px rgba(184,134,11,.35)":"0 1px 4px rgba(0,0,0,.08)",transition:"all .2s"}}>
+              <div style={{fontSize:44,marginBottom:10}}>{cat.icon}</div>
+              <div style={{fontSize:17,fontWeight:800,color:form.categoria===cat.id?"white":C.label,marginBottom:5}}>{cat.id}</div>
+              <div style={{fontSize:12,color:form.categoria===cat.id?"rgba(255,255,255,.75)":C.secondary,lineHeight:1.4}}>{cat.desc}</div>
+            </button>
+          ))}
+        </div>
         <div style={{display:"flex",gap:10}}>
-          <Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(1)}/>
-          <Btn label="Avanti →" full onClick={()=>setStep(3)}/>
+          <Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(form.prodotti.length>0?6:1)}/>
+          <Btn label="Avanti →" disabled={!form.categoria} full onClick={()=>setStep(3)}/>
         </div>
       </div>}
 
-      {/* STEP 3 — Date e pagamento */}
+      {/* STEP 3 — Articolo */}
       {step===3&&<div>
-        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Date e pagamento</div>
+        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Dettagli articolo</div>
+        <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Descrivi il prodotto da ordinare</div>
+        <div style={{background:"#F0FFF4",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#059669",fontWeight:600}}>{CATS.find(c=>c.id===form.categoria)?.icon||"📦"} {form.categoria}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <IOSTextarea label="Descrizione *" placeholder="Es. Anello in oro giallo 18kt misura 14…" value={form.descrizione||""} onChange={e=>set("descrizione",e.target.value)} autoFocus/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <IOSInput label="Marca" placeholder="Es. Comete, Salvini…" value={form.marca||""} onChange={e=>set("marca",e.target.value)}/>
+            <IOSInput label="Cod. prodotto" placeholder="Es. AB1234" value={form.referenza||""} onChange={e=>set("referenza",e.target.value)}/>
+          </div>
+        </div>
+        <div style={{height:24}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(2)}/><Btn label="Avanti →" disabled={!form.descrizione?.trim()} full onClick={()=>setStep(4)}/></div>
+      </div>}
+
+      {/* STEP 4 — Prezzi */}
+      {step===4&&<div>
+        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Quantità e prezzi</div>
+        <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Tutto opzionale — puoi modificare in seguito</div>
+        <div style={{background:"#F0FFF4",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#059669",fontWeight:600}}>{form.descrizione?.slice(0,50)||"—"}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <IOSInput label="Quantità" type="number" min="1" value={form.quantita||1} onChange={e=>set("quantita",e.target.value)}/>
+            <IOSInput label="Prezzo vendita (€)" type="number" step="0.01" placeholder="0.00" value={form.prezzoVendita||""} onChange={e=>set("prezzoVendita",e.target.value)}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <IOSInput label="Prezzo acquisto (€)" type="number" step="0.01" placeholder="0.00" value={form.prezzoAcquisto||""} onChange={e=>set("prezzoAcquisto",e.target.value)}/>
+            <IOSInput label="Acconto (€)" type="number" step="0.01" placeholder="0.00" value={form.acconto||""} onChange={e=>set("acconto",e.target.value)}/>
+          </div>
+        </div>
+        <div style={{height:24}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(3)}/><Btn label="Avanti →" full onClick={()=>setStep(5)}/></div>
+      </div>}
+
+      {/* STEP 5 — Date e dettagli */}
+      {step===5&&<div>
+        <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Date e dettagli</div>
         <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Tutto opzionale — puoi modificare in seguito</div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <IOSInput label="Data ordine" type="date" value={form.dataOrdine} onChange={e=>set("dataOrdine",e.target.value)}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <IOSInput label="Data ordine" type="date" value={form.dataOrdine||today()} onChange={e=>set("dataOrdine",e.target.value)}/>
+            <IOSInput label="Consegna prevista" type="date" value={form.dataConsegnaPrevista||""} onChange={e=>set("dataConsegnaPrevista",e.target.value)}/>
+          </div>
           <div>
-            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>STATO ORDINE</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {Object.entries(ORDER_STATUSES).map(([k,v])=>(
-                <button key={k} onClick={()=>set("stato",k)} style={{background:form.stato===k?v.bg:"white",border:`2px solid ${form.stato===k?v.color:"transparent"}`,borderRadius:14,padding:"12px 16px",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:12,boxShadow:form.stato===k?`0 2px 8px ${v.color}33`:"0 1px 3px rgba(0,0,0,.07)"}}>
-                  <div style={{width:10,height:10,borderRadius:5,background:v.color,flexShrink:0}}/>
-                  <div style={{fontSize:15,fontWeight:form.stato===k?700:500,color:form.stato===k?v.color:C.label}}>{v.label}</div>
-                  {form.stato===k&&<span style={{marginLeft:"auto",color:v.color,fontSize:18}}>✓</span>}
-                </button>
+            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:8}}>STATO ARTICOLO</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {Object.entries(ORDER_STATUSES).filter(([k])=>k!=="annullato").map(([k,v])=>(
+                <button key={k} onClick={()=>set("statoProdotto",k)} style={{padding:"7px 16px",borderRadius:20,border:`2px solid ${form.statoProdotto===k?v.color:"transparent"}`,background:form.statoProdotto===k?v.bg:"#E5E5EA",color:form.statoProdotto===k?v.color:C.label,fontSize:13,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
               ))}
             </div>
           </div>
+          <IOSTextarea label="Note articolo" placeholder="Misura, colore, incisione, richieste speciali…" value={form.notaProdotto||""} onChange={e=>set("notaProdotto",e.target.value)}/>
+          <IOSTextarea label="Note interne ordine" placeholder="Annotazioni per uso interno…" value={form.note||""} onChange={e=>set("note",e.target.value)}/>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:8}}>FOTO ARTICOLO</div>
+            <button onClick={()=>fotoRef.current.click()} style={{width:"100%",border:"2px dashed #C9A227",borderRadius:16,padding:imgPreview?0:"16px",background:"#FDF6DC",cursor:"pointer",overflow:"hidden",minHeight:56,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {imgPreview?<img src={imgPreview} alt="ref" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:12}}/>:<div style={{textAlign:"center"}}><div style={{fontSize:28}}>📷</div><div style={{fontSize:13,color:"#B8860B",fontWeight:600,marginTop:2}}>Scatta o carica foto</div></div>}
+            </button>
+            <input ref={fotoRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleFoto}/>
+            {imgPreview&&<button onClick={()=>{setImgPreview(null);set("fotoUrl",null);set("fotoBlob",null);}} style={{marginTop:4,background:"none",border:"none",color:C.red,fontSize:13,cursor:"pointer",padding:0}}>✕ Rimuovi foto</button>}
+          </div>
         </div>
-        <div style={{height:24}}/>
-        <div style={{display:"flex",gap:10}}>
-          <Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(2)}/>
-          <Btn label="Rivedi riepilogo →" full onClick={()=>setStep(4)}/>
-        </div>
+        <div style={{height:24}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(4)}/><Btn label="Rivedi riepilogo →" full onClick={()=>setStep(6)}/></div>
       </div>}
 
-      {/* STEP 4 — Riepilogo */}
-      {step===4&&<div>
+      {/* STEP 6 — Riepilogo */}
+      {step===6&&<div>
         <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Tutto pronto!</div>
         <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Controlla il riepilogo prima di salvare</div>
 
         <IOSCard style={{marginBottom:12}}>
           <IOSRow icon="👤" label="Cliente" value={selC?`${selC.nome} ${selC.cognome}`:"—"}/>
-          <IOSRow icon="📅" label="Data ordine" value={fmtDate(form.dataOrdine)||"—"}/>
-          <IOSRow icon="📋" label="Stato" value={ORDER_STATUSES[form.stato]?.label||"—"} last/>
+          {form.operatore&&<IOSRow icon="👷" label="Operatore" value={form.operatore}/>}
+          <IOSRow icon="📅" label="Data ordine" value={fmtDate(form.dataOrdine)||"—"} last/>
         </IOSCard>
 
         {form.prodotti.length>0&&(
           <IOSCard style={{marginBottom:12}}>
-            <div style={{padding:"10px 16px 6px",fontSize:12,fontWeight:700,color:C.secondary}}>ARTICOLI ({form.prodotti.length})</div>
+            <div style={{padding:"10px 16px 6px",fontSize:12,fontWeight:700,color:C.secondary}}>ARTICOLI GIÀ AGGIUNTI ({form.prodotti.length})</div>
             {form.prodotti.map((p,i)=>(
-              <div key={p.id||i} style={{padding:"10px 16px",borderTop:"1px solid #F2F2F7"}}>
-                {p.fotoUrl&&<img src={p.fotoUrl} alt="foto" style={{width:"100%",maxHeight:90,objectFit:"cover",borderRadius:9,marginBottom:6}}/>}
-                <div style={{fontSize:14,fontWeight:600,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
-                {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:13,color:C.secondary}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
-                <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:3}}>
-                  {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
-                  {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(p.dataConsegnaPrevista)}</span>}
-                  {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>✅ Acc: {p.acconto} €</span>}
+              <div key={p.id||i} style={{padding:"10px 16px",borderTop:"1px solid #F2F2F7",display:"flex",alignItems:"flex-start",gap:8}}>
+                {p.fotoUrl&&<img src={p.fotoUrl} alt="" style={{width:44,height:44,objectFit:"cover",borderRadius:8,flexShrink:0}}/>}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
+                  {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:12,color:C.secondary}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:2}}>
+                    {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
+                    {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(p.dataConsegnaPrevista)}</span>}
+                    {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
+                  </div>
                 </div>
+                <button onClick={()=>removeProd(p.id)} style={{background:"none",border:"none",color:C.red,fontSize:18,cursor:"pointer",flexShrink:0,padding:"0 4px"}}>✕</button>
               </div>
             ))}
-            {totVendita>0&&<div style={{padding:"10px 16px",borderTop:"1px solid #F2F2F7",display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700}}><span>Totale vendita</span><span>{totVendita.toFixed(2)} €</span></div>}
           </IOSCard>
         )}
 
-        <IOSTextarea label="Note interne" placeholder="Annotazioni per uso interno…" value={form.note} onChange={e=>set("note",e.target.value)}/>
+        {form.descrizione?.trim()&&(
+          <IOSCard style={{marginBottom:12,border:"2px solid #C9A227"}}>
+            <div style={{padding:"10px 16px 6px",fontSize:12,fontWeight:700,color:"#B8860B"}}>ARTICOLO CORRENTE</div>
+            <div style={{padding:"0 16px 14px"}}>
+              {form.fotoUrl&&<img src={form.fotoUrl} alt="" style={{width:"100%",maxHeight:120,objectFit:"cover",borderRadius:10,marginBottom:8}}/>}
+              <div style={{fontSize:14,fontWeight:600,color:C.label}}>{form.quantita>1?`${form.quantita}× `:""}{form.descrizione}</div>
+              {[form.categoria,form.fornitore].filter(Boolean).length>0&&<div style={{fontSize:12,color:C.secondary}}>{[form.categoria,form.fornitore].filter(Boolean).join(" · ")}</div>}
+              {(form.marca||form.referenza)&&<div style={{fontSize:12,color:C.secondary}}>{[form.marca,form.referenza].filter(Boolean).join(" · ")}</div>}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
+                {form.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {form.prezzoVendita} €</span>}
+                {form.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(form.dataConsegnaPrevista)}</span>}
+                {form.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {form.acconto} €</span>}
+                <span style={{background:ORDER_STATUSES[form.statoProdotto]?.bg,color:ORDER_STATUSES[form.statoProdotto]?.color,fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:10}}>{ORDER_STATUSES[form.statoProdotto]?.label}</span>
+              </div>
+            </div>
+          </IOSCard>
+        )}
 
-        <div style={{height:24}}/>
-        <Btn label={saving?"Salvataggio…":isEdit?"✓ Salva modifiche":"✓ Crea ordine"} full disabled={saving||!form.customerId} onClick={handleSave}/>
+        {form.note&&<IOSCard style={{marginBottom:12}}><IOSRow icon="📋" label="Note" sub={form.note} last/></IOSCard>}
+
+        <button onClick={addCurrentProduct} style={{width:"100%",background:"#F0FFF4",border:"2px dashed #34C759",borderRadius:14,padding:14,color:"#059669",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"-apple-system,sans-serif",marginBottom:10}}>
+          ➕ Aggiungi altro articolo
+        </button>
+
+        <Btn label={saving?"Salvataggio…":isEdit?"✓ Salva modifiche":"✓ Crea ordine e stampa"} full disabled={saving||!form.customerId||(form.prodotti.length===0&&!form.descrizione?.trim())} onClick={handleSave}/>
         <div style={{height:10}}/>
-        <Btn label="← Modifica" variant="secondary" full onClick={()=>setStep(3)}/>
+        <Btn label="← Modifica" variant="secondary" full onClick={()=>setStep(5)}/>
       </div>}
 
     </FullScreen>
@@ -3330,128 +3451,112 @@ function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onW
   const totVendita=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
   const totAcquisto=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoAcquisto)||0)*(parseInt(p.quantita)||1),0);
   const margine=totVendita-totAcquisto;
-
   const statusFlow=["da_ordinare","ordinato","arrivato","consegnato"];
   const nextStatus=statusFlow[statusFlow.indexOf(order.stato)+1];
   const nextLabel=nextStatus?ORDER_STATUSES[nextStatus]?.label:null;
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:100,display:"flex",alignItems:"flex-end"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:C.surface,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"92vh",overflowY:"auto",padding:"20px 20px 40px"}}>
-        {order.fotoUrl&&<img src={order.fotoUrl} alt="foto ordine" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:14,marginBottom:12}}/>}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+      <div style={{background:C.surface,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"92vh",overflowY:"auto",paddingBottom:40}}>
+
+        {/* Header */}
+        <div style={{position:"sticky",top:0,background:"rgba(242,242,247,.96)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(0,0,0,.08)",padding:"14px 16px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:10}}>
           <div>
-            <div style={{fontSize:22,fontWeight:800,color:C.label}}>{order.numero}</div>
+            <div style={{fontSize:17,fontWeight:800,color:C.label}}>{order.numero}</div>
             <OrderStatusBadge stato={order.stato}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={onPrint} style={{background:"#FDF6DC",border:"none",borderRadius:10,padding:"8px 12px",color:"#B8860B",fontSize:14,fontWeight:700,cursor:"pointer"}}>🖨️</button>
             <button onClick={onEdit} style={{background:"#FDF6DC",border:"none",borderRadius:10,padding:"8px 12px",color:"#B8860B",fontSize:14,fontWeight:700,cursor:"pointer"}}>✏️</button>
-            <button onClick={onClose} style={{background:"none",border:"none",fontSize:24,cursor:"pointer",color:C.secondary}}>×</button>
+            <button onClick={onClose} style={{background:"none",border:"none",fontSize:24,cursor:"pointer",color:C.secondary,padding:"0 4px"}}>×</button>
           </div>
         </div>
 
-        {/* Cliente */}
-        {c&&(
-          <div style={{background:C.white,borderRadius:14,padding:14,marginBottom:12}}>
-            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:4}}>CLIENTE</div>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:16,fontWeight:700,color:C.label}}>{c.nome} {c.cognome}</div>
-                {c.telefono&&<div style={{fontSize:14,color:C.secondary,marginTop:2}}>{displayPhone(c)}</div>}
-              </div>
-              <WABtn customer={c} size={34}/>
-            </div>
-          </div>
-        )}
+        <div style={{padding:"16px 16px 0"}}>
 
-        {/* Data ordine */}
-        {order.dataOrdine&&(
-          <div style={{background:C.white,borderRadius:14,padding:14,marginBottom:12}}>
-            <div style={{fontSize:12,color:C.secondary,fontWeight:600,marginBottom:2}}>DATA ORDINE</div>
-            <div style={{fontSize:15,fontWeight:700}}>{fmtDate(order.dataOrdine)}</div>
-          </div>
-        )}
+          {/* Cliente + info ordine */}
+          <IOSCard style={{marginBottom:12}}>
+            {c&&<IOSRow icon="👤" label="Cliente" value={`${c.nome} ${c.cognome}`} sub={displayPhone(c)||undefined}/>}
+            {order.operatore&&<IOSRow icon="👷" label="Operatore" value={order.operatore}/>}
+            {order.dataOrdine&&<IOSRow icon="📅" label="Data ordine" value={fmtDate(order.dataOrdine)}/>}
+            <IOSRow icon="📋" label="Stato" value={s.label} last/>
+          </IOSCard>
 
-        {/* Prodotti con stato per articolo */}
-        {order.prodotti.length>0&&(
-          <div style={{background:C.white,borderRadius:14,padding:14,marginBottom:12}}>
-            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:10}}>ARTICOLI ({order.prodotti.length})</div>
-            {order.prodotti.map((p,i)=>{
-              const ps=ORDER_STATUSES[p.stato]||ORDER_STATUSES.da_ordinare;
-              const isExp=expandedProd===p.id;
-              return (
-                <div key={p.id||i} style={{paddingBottom:10,marginBottom:10,borderBottom:i<order.prodotti.length-1?`1px solid ${C.separator}`:"none"}}>
-                  {p.fotoUrl&&<img src={p.fotoUrl} alt="foto" style={{width:"100%",maxHeight:120,objectFit:"cover",borderRadius:10,marginBottom:8}}/>}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:15,fontWeight:700,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
-                      {(p.categoria||p.fornitore)&&<div style={{fontSize:13,color:C.secondary}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
-                      {p.note&&<div style={{fontSize:12,color:C.secondary,fontStyle:"italic"}}>{p.note}</div>}
-                      <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                        {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Vend: {p.prezzoVendita} €</span>}
-                        {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:p.dataConsegnaPrevista<today()&&p.stato!=="consegnato"?"#FF3B30":"#3B82F6",fontWeight:600}}>📅 {fmtDate(p.dataConsegnaPrevista)}</span>}
-                        {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>✅ Acc: {p.acconto} €</span>}
+          {/* Articoli */}
+          {order.prodotti.length>0&&(
+            <IOSCard style={{marginBottom:12}}>
+              <div style={{padding:"10px 16px 8px",fontSize:12,fontWeight:700,color:C.secondary}}>ARTICOLI ({order.prodotti.length})</div>
+              {order.prodotti.map((p,i)=>{
+                const ps=ORDER_STATUSES[p.stato]||ORDER_STATUSES.da_ordinare;
+                const isExp=expandedProd===p.id;
+                const isOverdue=p.dataConsegnaPrevista&&p.dataConsegnaPrevista<today()&&p.stato!=="consegnato";
+                return (
+                  <div key={p.id||i} style={{padding:"12px 16px",borderTop:"1px solid #F2F2F7"}}>
+                    {p.fotoUrl&&<img src={p.fotoUrl} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:10,marginBottom:10}}/>}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:15,fontWeight:700,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
+                        {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:13,color:C.secondary,marginTop:1}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
+                        {(p.marca||p.referenza)&&<div style={{fontSize:12,color:C.secondary}}>{[p.marca,p.referenza].filter(Boolean).join(" · ")}</div>}
+                        {p.note&&<div style={{fontSize:12,color:C.secondary,fontStyle:"italic",marginTop:2}}>{p.note}</div>}
+                        <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
+                          {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
+                          {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
+                          {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":"#3B82F6",fontWeight:600}}>{isOverdue?"⚠️ ":"📅 "}{fmtDate(p.dataConsegnaPrevista)}</span>}
+                        </div>
                       </div>
+                      <button onClick={()=>setExpandedProd(isExp?null:p.id)} style={{background:ps.bg,border:`1.5px solid ${ps.color}`,borderRadius:20,padding:"4px 10px",color:ps.color,fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>{ps.label} ▾</button>
                     </div>
-                    <button onClick={()=>setExpandedProd(isExp?null:p.id)} style={{background:ps.bg,border:`1.5px solid ${ps.color}`,borderRadius:20,padding:"4px 10px",color:ps.color,fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>{ps.label} ▾</button>
+                    {isExp&&(
+                      <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
+                        {Object.entries(ORDER_STATUSES).map(([k,v])=>(
+                          <button key={k} onClick={()=>{onProductStatus(order.id,p.id,k);setExpandedProd(null);}} style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${p.stato===k?v.color:"transparent"}`,background:p.stato===k?v.bg:"#E5E5EA",color:p.stato===k?v.color:C.label,fontSize:12,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {isExp&&(
-                    <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
-                      {Object.entries(ORDER_STATUSES).map(([k,v])=>(
-                        <button key={k} onClick={()=>{onProductStatus(order.id,p.id,k);setExpandedProd(null);}} style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${p.stato===k?v.color:"transparent"}`,background:p.stato===k?v.bg:"#E5E5EA",color:p.stato===k?v.color:C.label,fontSize:12,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
-                      ))}
-                    </div>
-                  )}
+                );
+              })}
+              {(totVendita>0||totAcquisto>0)&&(
+                <div style={{padding:"10px 16px",borderTop:"1px solid #F2F2F7"}}>
+                  {totVendita>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:C.label}}><span>Totale vendita</span><span>{totVendita.toFixed(2)} €</span></div>}
+                  {totAcquisto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.secondary,marginTop:2}}><span>Totale acquisto</span><span>{totAcquisto.toFixed(2)} €</span></div>}
+                  {totAcquisto>0&&totVendita>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:margine>=0?"#059669":"#FF3B30",marginTop:2}}><span>Margine</span><span>{margine.toFixed(2)} €</span></div>}
                 </div>
-              );
-            })}
-            {totVendita>0&&(
-              <div style={{paddingTop:8,borderTop:`1px solid ${C.separator}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700}}><span>Totale vendita</span><span>{totVendita.toFixed(2)} €</span></div>
-                {totAcquisto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.secondary,marginTop:2}}><span>Totale acquisto</span><span>{totAcquisto.toFixed(2)} €</span></div>}
-                {totAcquisto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:margine>=0?"#059669":"#FF3B30",marginTop:2}}><span>Margine</span><span>{margine.toFixed(2)} €</span></div>}
+              )}
+            </IOSCard>
+          )}
+
+          {/* Note */}
+          {order.note&&(
+            <IOSCard style={{marginBottom:12}}>
+              <IOSRow icon="📋" label="Note" sub={order.note} last/>
+            </IOSCard>
+          )}
+
+          {/* WA cliente */}
+          {c?.telefono&&(
+            <IOSCard style={{marginBottom:12}}>
+              <div style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{flex:1,fontSize:14,fontWeight:600,color:C.label}}>Contatta cliente</div>
+                <WABtn customer={c} size={36}/>
               </div>
-            )}
-          </div>
-        )}
+            </IOSCard>
+          )}
 
-        {/* Note */}
-        {order.note&&(
-          <div style={{background:C.white,borderRadius:14,padding:14,marginBottom:12}}>
-            <div style={{fontSize:14,color:C.label}}>{order.note}</div>
-          </div>
-        )}
-
-        {/* Avanza stato */}
-        {nextLabel&&order.stato!=="annullato"&&(
-          <button onClick={()=>onStatusChange(order.id,nextStatus)} style={{width:"100%",background:`linear-gradient(135deg,${s.color},${s.color}CC)`,border:"none",borderRadius:14,padding:"13px",color:"white",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:10}}>
-            → {nextLabel}
-          </button>
-        )}
-
-
-        {/* Cambio stato manuale */}
-        <div style={{marginBottom:12}}>
-          <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>CAMBIA STATO</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {Object.entries(ORDER_STATUSES).map(([k,v])=>(
-              <button key={k} onClick={()=>onStatusChange(order.id,k)} disabled={order.stato===k} style={{padding:"6px 14px",borderRadius:20,border:`2px solid ${order.stato===k?v.color:"transparent"}`,background:order.stato===k?v.bg:"#E5E5EA",color:order.stato===k?v.color:C.label,fontSize:13,fontWeight:700,cursor:order.stato===k?"default":"pointer",opacity:order.stato===k?1:.7}}>{v.label}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Elimina */}
-        {!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{width:"100%",background:"none",border:`1px solid ${C.separator}`,borderRadius:14,padding:"12px",color:"#FF3B30",fontSize:14,fontWeight:600,cursor:"pointer"}}>Elimina ordine</button>}
-        {confirmDel&&(
-          <div style={{background:"#FFF5F5",borderRadius:14,padding:14,textAlign:"center"}}>
-            <div style={{fontSize:15,fontWeight:700,color:"#FF3B30",marginBottom:12}}>Eliminare l'ordine?</div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{onDelete(order.id);onClose();}} style={{flex:1,background:"#FF3B30",border:"none",borderRadius:10,padding:"11px",color:"white",fontWeight:700,fontSize:15,cursor:"pointer"}}>Elimina</button>
-              <button onClick={()=>setConfirmDel(false)} style={{flex:1,background:"#E5E5EA",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:15,cursor:"pointer"}}>Annulla</button>
+          {/* Elimina */}
+          {!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{width:"100%",background:"none",border:`1px solid ${C.separator}`,borderRadius:14,padding:"12px",color:"#FF3B30",fontSize:14,fontWeight:600,cursor:"pointer"}}>Elimina ordine</button>}
+          {confirmDel&&(
+            <div style={{background:"#FFF5F5",borderRadius:14,padding:14,textAlign:"center"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#FF3B30",marginBottom:12}}>Eliminare l'ordine?</div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{onDelete(order.id);onClose();}} style={{flex:1,background:"#FF3B30",border:"none",borderRadius:10,padding:"11px",color:"white",fontWeight:700,fontSize:15,cursor:"pointer"}}>Elimina</button>
+                <button onClick={()=>setConfirmDel(false)} style={{flex:1,background:"#E5E5EA",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:15,cursor:"pointer"}}>Annulla</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+        </div>
       </div>
     </div>
   );
@@ -3702,6 +3807,12 @@ function MainApp() {
     if(viewRepair?.id===repair.id)setViewRepair(updated);
   };
 
+  const handleToggleGaranzia=async repair=>{
+    const updated={...repair,inGaranzia:!repair.inGaranzia};
+    await withSync(()=>api.upsertRepair(updated));
+    if(viewRepair?.id===repair.id)setViewRepair(updated);
+  };
+
   const handleDateChange=async(id,dataConsegna)=>{
     const rep=repairs.find(r=>r.id===id);if(!rep)return;
     const updated={...rep,dataConsegna};
@@ -3711,15 +3822,17 @@ function MainApp() {
 
   const handlePreventivoChange=async(id,preventivo)=>{
     const rep=repairs.find(r=>r.id===id);if(!rep)return;
-    const updated={...rep,preventivo};
+    const richiestaPreventivo=preventivo?true:rep.richiestaPreventivo;
+    const updated={...rep,preventivo,richiestaPreventivo};
     await withSync(()=>api.upsertRepair(updated));
     if(viewRepair?.id===id)setViewRepair(updated);
-    if(preventivo&&rep.richiestaPreventivo&&!rep.preventivoAccettato){
+    if(preventivo&&!rep.preventivoAccettato){
       const cust=customers.find(c=>c.id===rep.customerId);
       if(cust?.telefono){
         const token=await api.createQuoteToken(rep.id);
         const link=rep.linkToken?`https://zerymac.github.io/gioielleria-repair/repair-status.html?token=${rep.linkToken}&n=${rep.numero}`:`https://zerymac.github.io/gioielleria-repair/approve-quote.html?token=${token}`;
-        const msg=`Gentile ${cust.nome} ${cust.cognome},\nabbiamo ricevuto il preventivo per la sua riparazione n° ${rep.numero} (${rep.descrizione}).\n\nImporto: ${preventivo} €\n\nPer confermare o rifiutare il preventivo clicchi sul link:\n${link}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+        const notaLine=rep.notaPreventivo?`Lavori: ${rep.notaPreventivo}\n`:"";
+        const msg=`Gentile ${cust.nome} ${cust.cognome},\nabbiamo ricevuto il preventivo per la sua riparazione n° ${rep.numero} (${rep.descrizione}).\n\n${notaLine}Importo: ${preventivo} €\n\nPer confermare o rifiutare il preventivo clicchi sul link:\n${link}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
         setWaToast({repair:updated,customer:cust,customMsg:msg,label:"💬 Invia preventivo al cliente"});
       }
     }
@@ -3742,6 +3855,20 @@ function MainApp() {
   const handlePrezzoFinaleChange=async(id,prezzoFinale)=>{
     const rep=repairs.find(r=>r.id===id);if(!rep)return;
     const updated={...rep,prezzoFinale};
+    await withSync(()=>api.upsertRepair(updated));
+    if(viewRepair?.id===id)setViewRepair(updated);
+  };
+
+  const handleMarcaRefChange=async(id,marca,referenza)=>{
+    const rep=repairs.find(r=>r.id===id);if(!rep)return;
+    const updated={...rep,marca,referenza};
+    await withSync(()=>api.upsertRepair(updated));
+    if(viewRepair?.id===id)setViewRepair(updated);
+  };
+
+  const handleNotaPreventivoChange=async(id,notaPreventivo)=>{
+    const rep=repairs.find(r=>r.id===id);if(!rep)return;
+    const updated={...rep,notaPreventivo};
     await withSync(()=>api.upsertRepair(updated));
     if(viewRepair?.id===id)setViewRepair(updated);
   };
@@ -3832,33 +3959,49 @@ function MainApp() {
         let msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la ricezione del suo ordine n° ${numero}.`;
         if(saved.prodotti?.length>0){
           msg+="\n\n"+saved.prodotti.map(p=>{
-            let line=`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}`;
+            const tot=(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1);
+            const acc=parseFloat(p.acconto)||0;
+            const rim=tot-acc;
+            let line=`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`;
+            if(tot>0)line+=`\n  Prezzo: ${tot.toFixed(2)} €`;
+            if(acc>0)line+=`\n  Acconto: ${acc.toFixed(2)} €`;
+            if(rim>0)line+=`\n  Da saldare: ${rim.toFixed(2)} €`;
             if(p.dataConsegnaPrevista)line+=`\n  Consegna: ${fmtDate(p.dataConsegnaPrevista)}`;
-            if(p.acconto)line+=`\n  Acconto: ${p.acconto} €`;
             return line;
           }).join("\n");
         }
         msg+=`\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        setWaToast({repair:saved,customer:c,customMsg:msg,label:"💬 Invia conferma ordine"});
+        fetch("http://localhost:3001/wa/send-bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
+          .then(r=>r.json()).then(d=>console.log(`📲 WA conferma ordine inviato a ${c.nome} ${c.cognome}`))
+          .catch(e=>console.warn("WA conferma ordine non disponibile:",e.message));
       }
     }
   };
 
   const handleOrderProductStatus=async(orderId,prodId,stato)=>{
-    const ord=orders.find(o=>o.id===orderId);if(!ord)return;
+    const ord=(viewOrder?.id===orderId?viewOrder:orders.find(o=>o.id===orderId));if(!ord)return;
     const prod=ord.prodotti.find(p=>p.id===prodId);
     const prodotti=ord.prodotti.map(p=>p.id===prodId?{...p,stato}:p);
-    const updated={...ord,prodotti};
+    const nuovoStato=prodotti.every(p=>p.stato==="consegnato")?"consegnato":
+      prodotti.some(p=>p.stato==="arrivato")?"arrivato":
+      prodotti.some(p=>p.stato==="ordinato")?"ordinato":"da_ordinare";
+    const updated={...ord,prodotti,stato:nuovoStato};
     await withSync(()=>api.upsertOrder(updated));
     if(viewOrder?.id===orderId)setViewOrder(updated);
     const c=customers.find(x=>x.id===ord.customerId);
     if(c?.telefono&&prod){
-      const nomeProd=`${prod.quantita>1?prod.quantita+"× ":""}${prod.descrizione}`;
-      if(stato==="arrivato"&&prod.stato==="ordinato"){
-        const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        setWaToast({repair:ord,customer:c,customMsg:msg,label:"💬 Articolo arrivato"});
+      const nomeProd=`${prod.quantita>1?prod.quantita+"× ":""}${prod.descrizione}${prod.marca?` (${prod.marca})`:"" }`;
+      const totProd=(parseFloat(prod.prezzoVendita)||0)*(parseInt(prod.quantita)||1);
+      const accProd=parseFloat(prod.acconto)||0;
+      const rimProd=totProd-accProd;
+      const priceInfo=totProd>0?`\nImporto: ${totProd.toFixed(2)} €${accProd>0?`\nAcconto versato: ${accProd.toFixed(2)} €`:""}${rimProd>0?`\nRimanenza da pagare: ${rimProd.toFixed(2)} €`:""}`:""
+      if(stato==="arrivato"){
+        const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.${priceInfo}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+        fetch("http://localhost:3001/wa/send-bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
+          .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
+          .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
       } else if(stato==="consegnato"){
-        const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna di "${nomeProd}" dell'ordine n° ${ord.numero}.\n\nGrazie per aver scelto ${SHOP.nome}.`;
+        const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna di "${nomeProd}" dell'ordine n° ${ord.numero}.${priceInfo}\n\nGrazie per aver scelto ${SHOP.nome}.`;
         setWaToast({repair:ord,customer:c,customMsg:msg,label:"📄 Articolo consegnato"});
       }
     }
@@ -3866,7 +4009,25 @@ function MainApp() {
 
   const handleOrderStatus=async(id,stato)=>{
     await withSync(()=>api.updateOrderStatus(id,stato));
+    setOrders(prev=>prev.map(o=>o.id===id?{...o,stato}:o));
     if(viewOrder?.id===id)setViewOrder(prev=>({...prev,stato}));
+  };
+
+  const handleConsegnaOrder=async order=>{
+    const prodotti=order.prodotti.map(p=>({...p,stato:"consegnato"}));
+    const updated={...order,prodotti,stato:"consegnato"};
+    await withSync(()=>api.upsertOrder(updated));
+    setOrders(prev=>prev.map(o=>o.id===order.id?updated:o));
+    if(viewOrder?.id===order.id)setViewOrder(updated);
+    const c=customers.find(x=>x.id===order.customerId);
+    if(c?.telefono){
+      const totOrd=prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
+      const totAcc=prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
+      const rimOrd=totOrd-totAcc;
+      const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
+      const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna dell'ordine n° ${order.numero}.${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
+      setWaToast({repair:updated,customer:c,customMsg:msg,label:"📄 Conferma consegna"});
+    }
   };
 
   const handleDeleteOrder=async id=>{
@@ -3875,13 +4036,17 @@ function MainApp() {
   };
 
   const handleOrderWhatsApp=(order,customer,tipo)=>{
+    const totOrd=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
+    const totAcc=order.prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
+    const rimOrd=totOrd-totAcc;
+    const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
     let msg="";
     if(tipo==="arrivato"){
       msg=`Gentile ${customer.nome} ${customer.cognome},\nle comunichiamo che il suo ordine n° ${order.numero} è arrivato ed è pronto per il ritiro.\n\n`;
-      if(order.prodotti.length>0)msg+=order.prodotti.map(p=>`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}`).join("\n")+"\n\n";
-      msg+=`${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+      if(order.prodotti.length>0)msg+=order.prodotti.map(p=>{const t=(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1);return`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}${t>0?` — ${t.toFixed(2)} €`:""}`;}).join("\n")+"\n";
+      msg+=totLines+`\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
     } else {
-      msg=`Gentile ${customer.nome} ${customer.cognome},\nconfermiamo la consegna dell'ordine n° ${order.numero}.\n\nGrazie per aver scelto ${SHOP.nome}.`;
+      msg=`Gentile ${customer.nome} ${customer.cognome},\nconfermiamo la consegna dell'ordine n° ${order.numero}.${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
     }
     setWaToast({repair:order,customer,customMsg:msg,label:"💬 Invia messaggio"});
   };
@@ -3896,7 +4061,7 @@ function MainApp() {
       const numero=await api.getNextRepairNum();
       const id=uid();
       const linkToken=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})();
-      const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
+      const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,inGaranzia:form.inGaranzia||false,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
       if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;}
       await api.upsertRepair(n);
       savedRepairs.push(n);
@@ -3989,7 +4154,7 @@ function MainApp() {
       {wizard&&<RepairWizard customers={customers} onSave={handleSaveRepair} onClose={()=>setWizard(false)} onAddedCustomer={handleWizardAddCustomer}/>}
       {customerForm!==null&&<CustomerForm customer={customerForm.id?customerForm:null} onSave={handleSaveCustomer} onClose={()=>setCustomerForm(null)}/>}
       {receiptModal&&<ReceiptModal repair={receiptModal.repair} customer={receiptModal.customer} onClose={()=>setReceiptModal(null)}/>}
-      {viewRepair&&<RepairDetail repair={viewRepair} customer={customers.find(c=>c.id===viewRepair.customerId)} ddt={getDDT(viewRepair)} onClose={()=>setViewRepair(null)} onReceipt={openReceipt} onStatusChange={handleStatus} onTogglePrev={handleTogglePrev} onToggleRichPrev={handleToggleRichPrev} onDelete={()=>handleSoftDelete(viewRepair.id)} onDateChange={handleDateChange} onConsegna={handleConsegna} onPreventivoChange={handlePreventivoChange} onAccontoChange={handleAccontoChange} onToggleInterna={handleToggleInterna} onSpesaChange={handleSpesaChange} onPrezzoFinaleChange={handlePrezzoFinaleChange}/>}
+      {viewRepair&&<RepairDetail repair={viewRepair} customer={customers.find(c=>c.id===viewRepair.customerId)} ddt={getDDT(viewRepair)} onClose={()=>setViewRepair(null)} onReceipt={openReceipt} onStatusChange={handleStatus} onTogglePrev={handleTogglePrev} onToggleRichPrev={handleToggleRichPrev} onDelete={()=>handleSoftDelete(viewRepair.id)} onDateChange={handleDateChange} onConsegna={handleConsegna} onPreventivoChange={handlePreventivoChange} onAccontoChange={handleAccontoChange} onToggleInterna={handleToggleInterna} onToggleGaranzia={handleToggleGaranzia} onSpesaChange={handleSpesaChange} onPrezzoFinaleChange={handlePrezzoFinaleChange} onMarcaRefChange={handleMarcaRefChange} onNotaPreventivoChange={handleNotaPreventivoChange}/>}
       {viewCustomer&&<CustomerDetail customer={viewCustomer} repairs={repairs.filter(r=>r.customerId===viewCustomer.id)} onClose={()=>setViewCustomer(null)} onEdit={c=>{setViewCustomer(null);setCustomerForm(c);}} onOpenRepair={r=>{setViewCustomer(null);setViewRepair(r);}} onReceipt={openReceipt} onDelete={handleDeleteCustomer}/>}
       {ddtForm&&<DDTForm repairs={repairs} customers={customers} repairers={repairers} onSave={handleDDT} onClose={()=>setDdtForm(false)}/>}
       {editDDT&&<DDTForm repairs={repairs} customers={customers} repairers={repairers} existing={editDDT} onSave={handleEditDDT} onClose={()=>setEditDDT(null)}/>}
@@ -4003,7 +4168,7 @@ function MainApp() {
       {tab==="home"&&<Dashboard repairs={repairs} customers={customers} ddts={ddts} onView={setViewRepair} onReceipt={openReceipt} onNew={()=>setWizard(true)} onScan={()=>setLiveQR(true)} onNav={navToRepairs} onConsegna={()=>setShowConsegna(true)}/>}
       {tab==="repairs"&&<RepairsPage repairs={repairs} customers={customers} ddts={ddts} onView={setViewRepair} onReceipt={openReceipt} onNew={()=>setWizard(true)} onScan={()=>setLiveQR(true)} navFilter={navFilter} onClearNavFilter={()=>setNavFilter("")} onRientro={()=>setRientroRapido(true)}/>}
       {tab==="customers"&&<CustomersPage customers={customers} repairs={repairs} onView={setViewCustomer} onNew={()=>setCustomerForm({})} onImport={()=>setImportContatti(true)} onDuplicates={()=>setShowDuplicates(true)}/>}
-      {tab==="orders"&&<OrdersPage orders={orders} customers={customers} onView={setViewOrder} onNew={()=>setOrderForm({})}/>}
+      {tab==="orders"&&<OrdersPage orders={orders} customers={customers} onView={setViewOrder} onNew={()=>setOrderForm({})} onConsegna={handleConsegnaOrder}/>}
       {tab==="ddt"&&<DDTPage ddts={ddts} repairs={repairs} customers={customers} onView={setViewDDT} onNew={()=>setDdtForm(true)}/>}
       {tab==="settings"&&<SettingsPage customers={customers} repairs={repairs} ddts={ddts} repairers={repairers} onRestore={handleRestore} onSaveRepairer={handleSaveRepairer} onDeleteRepairer={handleDeleteRepairer}/>}
     </>

@@ -108,6 +108,7 @@ function renderStatus(r, quoteToken) {
              '<div class="row"><span>Oggetto</span><strong>' + esc(r.descrizione) + '</strong></div>';
   if (r.categoria) rows += '<div class="row"><span>Categoria</span><strong>' + esc(r.categoria) + (r.tipo_lavoro ? ' &middot; ' + esc(r.tipo_lavoro) : '') + '</strong></div>';
   if (r.problema)  rows += '<div class="row"><span>Lavoro</span><strong>' + esc(r.problema) + '</strong></div>';
+  if (r.nota_preventivo) rows += '<div class="row"><span>Lavori da eseguire</span><strong>' + esc(r.nota_preventivo) + '</strong></div>';
   if (r.data_consegna) rows += '<div class="row"><span>Consegna prevista</span><strong>' + esc(r.data_consegna) + '</strong></div>';
 
   var prevSection = '';
@@ -122,6 +123,7 @@ function renderStatus(r, quoteToken) {
         '<div class="prev-box">' +
           '<div class="prev-title">Importo preventivo</div>' +
           '<div class="prev-amount">&euro; ' + esc(r.preventivo) + '</div>' +
+          (r.nota_preventivo ? '<div class="prev-note" style="margin-bottom:6px"><strong>Lavori:</strong> ' + esc(r.nota_preventivo) + '</div>' : '') +
           '<div class="prev-note">Confermi o rifiuti il preventivo qui sotto.</div>' +
         '</div>' +
         '<button class="btn-confirm" id="btnConfirm">Confermo il preventivo</button>' +
