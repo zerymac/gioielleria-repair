@@ -17,6 +17,9 @@ let waClient        = null;
 let waReady         = false;
 let realtimeStarted = false;
 
+/* ── Delay casuale per evitare rilevamento spam da WhatsApp ── */
+const waDelay = () => new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
+
 /* ── Formatta numero telefono in formato WhatsApp (@c.us) ── */
 function formatPhone(telefono) {
   const digits = (telefono || '').replace(/\D/g, '');
@@ -110,6 +113,7 @@ async function handleAccepted(supabase, repairId) {
       if (shopTel) {
         const shopPhone = formatPhone(shopTel);
         if (shopPhone) {
+          await waDelay();
           await waClient.sendMessage(shopPhone, buildAcceptShopMessage(repair));
           console.log(`✅ WA accettazione inviato al negozio per ${repair.numero}`);
         }
@@ -121,6 +125,7 @@ async function handleAccepted(supabase, repairId) {
     if (riparatore?.telefono) {
       const phone = formatPhone(riparatore.telefono);
       if (phone) {
+        await waDelay();
         await waClient.sendMessage(phone, buildAcceptMessage(repair, riparatore));
         console.log(`✅ WA accettazione inviato a ${riparatore.nome} per ${repair.numero}`);
       }
@@ -132,6 +137,7 @@ async function handleAccepted(supabase, repairId) {
     if (shopTel) {
       const shopPhone = formatPhone(shopTel);
       if (shopPhone) {
+        await waDelay();
         await waClient.sendMessage(shopPhone, buildAcceptShopMessage(repair));
         console.log(`✅ WA accettazione inviato al negozio per ${repair.numero} (esterna)`);
       }
@@ -160,6 +166,7 @@ async function handleDeclined(supabase, repairId) {
       if (shopTel) {
         const shopPhone = formatPhone(shopTel);
         if (shopPhone) {
+          await waDelay();
           await waClient.sendMessage(shopPhone, buildDeclineShopMessage(repair));
           console.log(`✅ WA disdetta inviato al negozio per ${repair.numero}`);
         }
@@ -171,6 +178,7 @@ async function handleDeclined(supabase, repairId) {
       if (riparatore?.telefono) {
         const phone = formatPhone(riparatore.telefono);
         if (phone) {
+          await waDelay();
           await waClient.sendMessage(phone, buildDeclineRepairerMessage(repair, riparatore));
           console.log(`✅ WA disdetta inviato a ${riparatore.nome} per ${repair.numero}`);
         }
@@ -179,6 +187,7 @@ async function handleDeclined(supabase, repairId) {
       if (shopTel) {
         const shopPhone = formatPhone(shopTel);
         if (shopPhone) {
+          await waDelay();
           await waClient.sendMessage(shopPhone, buildDeclineShopMessage(repair));
           console.log(`✅ WA disdetta inviato al negozio per ${repair.numero} (esterna)`);
         }
@@ -282,4 +291,28 @@ function initWABot() {
   waClient.initialize();
 }
 
-module.exports = { initWABot, isWAReady: () => waReady };
+/* ── Invio massivo con delay ── */
+async function sendBulkWA(messages) {
+  if (!waReady || !waClient) {
+    console.warn('⚠️  WA non pronto — invio bulk annullato');
+    return { sent: 0, failed: messages.length };
+  }
+  let sent = 0, failed = 0;
+  for (const { telefono, messaggio } of messages) {
+    const phone = formatPhone(telefono);
+    if (!phone) { failed++; continue; }
+    try {
+      await waDelay();
+      await waClient.sendMessage(phone, messaggio);
+      console.log(`✅ WA bulk inviato a ${telefono}`);
+      sent++;
+    } catch (e) {
+      console.error(`❌ WA bulk errore per ${telefono}:`, e.message);
+      failed++;
+    }
+  }
+  console.log(`📊 WA bulk completato: ${sent} inviati, ${failed} falliti`);
+  return { sent, failed };
+}
+
+module.exports = { initWABot, isWAReady: () => waReady, sendBulkWA };

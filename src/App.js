@@ -101,7 +101,7 @@ const C = {
 /* ── API ── */
 const toCustomer = (r) => ({ id:r.id, nome:r.nome, cognome:r.cognome, telefono:r.telefono, telefonoPrefisso:r.telefono_prefisso||"+39", email:r.email, indirizzo:r.indirizzo, codiceFiscale:r.codice_fiscale, note:r.note });
 const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null });
-const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, note:r.note });
+const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, ddtRientroNumero:r.ddt_rientro_numero||null, note:r.note });
 const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, createdAt:r.created_at });
 
 const api = {
@@ -137,7 +137,7 @@ const api = {
   async updateRepairStatus(id,status) { await supabase.from("repairs").update({status}).eq("id",id); },
   async updateRepairReturn(id,fields) { await supabase.from("repairs").update({ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }).eq("id",id); },
   async getDDTs() { const {data}=await supabase.from("ddts").select("*").order("created_at",{ascending:false}); return (data||[]).map(toDDT); },
-  async upsertDDT(d) { await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, note:d.note }); },
+  async upsertDDT(d) { await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, ddt_rientro_numero:d.ddtRientroNumero||null, note:d.note }); },
   async createQuoteToken(repairId) { const token=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
   async deleteDDT(id) { await supabase.from("ddts").delete().eq("id",id); },
   async getRepairers() { const {data}=await supabase.from("repairers").select("*").order("nome"); return data||[]; },
@@ -2550,6 +2550,7 @@ function DDTDetail({ddt,repairs,customers,onClose,onReturn,onPrint,onEdit,onDele
         {ddt.riparatore?.piva&&<IOSRow icon="🪪" label="P.IVA" value={ddt.riparatore.piva}/>}
         <IOSRow icon="📅" label="Data invio" value={fmtDate(ddt.data)}/>
         {ddt.dataRientro&&<IOSRow icon="📅" label="Data rientro" value={fmtDate(ddt.dataRientro)}/>}
+        {ddt.ddtRientroNumero&&<IOSRow icon="🧾" label="DDT fornitore" value={ddt.ddtRientroNumero}/>}
         <IOSRow icon="📦" label="Oggetti" value={items.length+" pz."} last/>
       </IOSCard>
       {ddt.riparatore?.trasporto&&(()=>{const t=ddt.riparatore.trasporto;return(
@@ -2666,9 +2667,15 @@ function DDTDetail({ddt,repairs,customers,onClose,onReturn,onPrint,onEdit,onDele
 function DDTReturn({ddt,repairs,customers,onSave,onClose}) {
   const items=repairs.filter(r=>ddt.riparazioniIds?.includes(r.id));
   const [costs,setCosts]=useState(()=>Object.fromEntries(items.map(r=>[r.id,{spesa:"",prezzoFinale:"",nuovoStato:"pronto",causale:""}])));
+  const [ddtRientroNumero,setDdtRientroNumero]=useState("");
+  const [ddtRientroData,setDdtRientroData]=useState(today());
   const setF=(id,k,v)=>setCosts(c=>({...c,[id]:{...c[id],[k]:v}}));
   return (
     <Sheet onClose={onClose} title={"Rientro "+ddt.numero}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        <IOSInput label="N° DDT fornitore" placeholder="es. 42" value={ddtRientroNumero} onChange={e=>setDdtRientroNumero(e.target.value)}/>
+        <IOSInput label="Data rientro" type="date" value={ddtRientroData} onChange={e=>setDdtRientroData(e.target.value)}/>
+      </div>
       <div style={{fontSize:14,color:C.secondary,marginBottom:16}}>Inserisci la spesa del fornitore e il prezzo finale per ogni oggetto.</div>
       <div style={{display:"flex",flexDirection:"column",gap:12,maxHeight:"55vh",overflowY:"auto",marginBottom:16}}>
         {items.map(r=>{const c=customers.find(x=>x.id===r.customerId);const fi=costs[r.id];const isReso=fi?.nuovoStato==="reso_non_riparato";return(
@@ -2688,7 +2695,7 @@ function DDTReturn({ddt,repairs,customers,onSave,onClose}) {
           </div>);
         })}
       </div>
-      <div style={{display:"flex",gap:10}}><Btn label="Annulla" variant="secondary" full onClick={onClose}/><Btn label="✅ Conferma rientro" variant="green" full onClick={()=>onSave(costs)}/></div>
+      <div style={{display:"flex",gap:10}}><Btn label="Annulla" variant="secondary" full onClick={onClose}/><Btn label="✅ Conferma rientro" variant="green" full onClick={()=>onSave(costs,{ddtRientroNumero:ddtRientroNumero.trim()||null,ddtRientroData:ddtRientroData||today()})}/></div>
     </Sheet>
   );
 }
@@ -2699,6 +2706,8 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
   const [step,setStep]=useState(1);
   const [selected,setSelected]=useState([]);
   const [costs,setCosts]=useState({});
+  const [ddtRientroNumero,setDdtRientroNumero]=useState("");
+  const [ddtRientroData,setDdtRientroData]=useState(today());
   const [qrMsg,setQrMsg]=useState("");
   const [search,setSearch]=useState("");
   const fileRef=useRef();
@@ -2840,6 +2849,10 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
 
       {/* ── STEP 2: Costi ── */}
       {step===2&&<div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <IOSInput label="N° DDT fornitore" placeholder="es. 42" value={ddtRientroNumero} onChange={e=>setDdtRientroNumero(e.target.value)}/>
+          <IOSInput label="Data rientro" type="date" value={ddtRientroData} onChange={e=>setDdtRientroData(e.target.value)}/>
+        </div>
         <div style={{fontSize:14,color:C.secondary,marginBottom:16}}>Inserisci spesa del fornitore e prezzo finale per il cliente.</div>
         <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
           {selected.map(id=>{
@@ -2877,7 +2890,7 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(1)}/>
-          <Btn label="✅ Conferma rientri" variant="green" full onClick={()=>onSave(selected,costs)}/>
+          <Btn label="✅ Conferma rientri" variant="green" full onClick={()=>onSave(selected,costs,{ddtRientroNumero:ddtRientroNumero.trim()||null,ddtRientroData:ddtRientroData||today()})}/>
         </div>
       </div>}
     </FullScreen>
@@ -3705,8 +3718,8 @@ function MainApp() {
       const cust=customers.find(c=>c.id===rep.customerId);
       if(cust?.telefono){
         const token=await api.createQuoteToken(rep.id);
-        const link=`https://zerymac.github.io/gioielleria-repair/approve-quote.html?token=${token}`;
-        const msg=`Gentile ${cust.nome} ${cust.cognome},\nabbiamo ricevuto il preventivo per la sua riparazione n° ${rep.numero} (${rep.descrizione}).\n\nImporto: ${preventivo} €\n\nPer confermare il preventivo clicchi sul link:\n${link}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+        const link=rep.linkToken?`https://zerymac.github.io/gioielleria-repair/repair-status.html?token=${rep.linkToken}&n=${rep.numero}`:`https://zerymac.github.io/gioielleria-repair/approve-quote.html?token=${token}`;
+        const msg=`Gentile ${cust.nome} ${cust.cognome},\nabbiamo ricevuto il preventivo per la sua riparazione n° ${rep.numero} (${rep.descrizione}).\n\nImporto: ${preventivo} €\n\nPer confermare o rifiutare il preventivo clicchi sul link:\n${link}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
         setWaToast({repair:updated,customer:cust,customMsg:msg,label:"💬 Invia preventivo al cliente"});
       }
     }
@@ -3737,21 +3750,31 @@ function MainApp() {
   const handleWizardAddCustomer=async(data,cb)=>{await withSync(()=>api.upsertCustomer(data));cb(data.id);};
 
   /* Rientro rapido: aggiorna riparazioni selezionate e controlla DDT */
-  const handleRientroRapido=async(selectedIds,costs)=>{
+  const handleRientroRapido=async(selectedIds,costs,rientroInfo)=>{
+    const dataRientrata=rientroInfo?.ddtRientroData||today();
+    const bulk=selectedIds.length>1;
+    const bulkMessages=[];
     await withSync(async()=>{
       for(const id of selectedIds){
         const fi=costs[id];if(!fi)continue;
         const spesa=parseFloat(fi.spesa)||null;const fin=parseFloat(fi.prezzoFinale)||null;
-        await api.updateRepairReturn(id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:fin,preventivo:fin||repairs.find(r=>r.id===id)?.preventivo,dataRientrata:today()});
+        await api.updateRepairReturn(id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:fin,preventivo:fin||repairs.find(r=>r.id===id)?.preventivo,dataRientrata});
         const repUpd=repairs.find(r=>r.id===id);
         const custUpd=repUpd?customers.find(c=>c.id===repUpd.customerId):null;
-        if(fi.nuovoStato==="pronto"){
-          if(custUpd?.telefono)setWaToast({repair:{...repUpd,prezzoFinale:fin??repUpd?.prezzoFinale},customer:custUpd});
+        if(fi.nuovoStato==="pronto"&&custUpd?.telefono){
+          const repConFin={...repUpd,prezzoFinale:fin??repUpd?.prezzoFinale};
+          if(bulk){
+            const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla sua riparazione n° ${repUpd.numero} è pronta per il ritiro.${fin?`\n\nImporto da saldare: ${fin} €`:""}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+            bulkMessages.push({telefono:custUpd.telefono,messaggio:msg});
+          } else {
+            setWaToast({repair:repConFin,customer:custUpd});
+          }
         }
         if(fi.nuovoStato==="reso_non_riparato"&&custUpd?.telefono){
           const causale=fi.causale?.trim()||"";
           const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla informiamo che la sua riparazione n° ${repUpd.numero} (${repUpd.descrizione}) ci è stata restituita senza essere riparata.${causale?`\n\nMotivo: ${causale}`:""}\n\nL'oggetto è disponibile per il ritiro.\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-          setWaToast({repair:repUpd,customer:custUpd,customMsg:msg,label:"💬 Avvisa cliente"});
+          if(bulk) bulkMessages.push({telefono:custUpd.telefono,messaggio:msg});
+          else setWaToast({repair:repUpd,customer:custUpd,customMsg:msg,label:"💬 Avvisa cliente"});
         }
       }
       /* Auto-marca DDT come rientrato se tutti i suoi oggetti sono tornati */
@@ -3760,11 +3783,16 @@ function MainApp() {
         const ddt=ddts.find(d=>d.id===ddtId);if(!ddt||ddt.stato==="rientrato")continue;
         const allIds=ddt.riparazioniIds||[];
         const allReturned=allIds.every(repId=>selectedIds.includes(repId)||(repairs.find(r=>r.id===repId)?.status!=="presso_esterno"));
-        if(allReturned)await api.upsertDDT({...ddt,stato:"rientrato",dataRientro:today()});
+        if(allReturned)await api.upsertDDT({...ddt,stato:"rientrato",dataRientro:rientroInfo?.ddtRientroData||today(),ddtRientroNumero:rientroInfo?.ddtRientroNumero||ddt.ddtRientroNumero||null});
       }
     });
     await Promise.all([loadRepairs(),loadDDTs()]);
     setRientroRapido(false);
+    if(bulkMessages.length>0){
+      fetch("http://localhost:3001/wa/send-bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:bulkMessages})})
+        .then(r=>r.json()).then(d=>console.log(`📲 WA bulk: ${d.queued} messaggi in coda`))
+        .catch(e=>console.warn("WA bulk non disponibile:",e.message));
+    }
   };
 
   const handleSaveRepairer=async data=>{await withSync(()=>api.upsertRepairer(data));};
@@ -3914,19 +3942,20 @@ function MainApp() {
   };
   const handleDeleteDDT=async()=>{const ddt=viewDDT;await withSync(async()=>{await api.deleteDDT(ddt.id);for(const id of ddt.riparazioniIds||[])await api.updateRepairStatus(id,"ricevuto");});setViewDDT(null);};
 
-  const handleReturn=async costs=>{
+  const handleReturn=async(costs,rientroInfo)=>{
     const ddt=ddtReturn;
+    const dataRientrata=rientroInfo?.ddtRientroData||today();
     await withSync(async()=>{
       for(const r of repairs.filter(r=>ddt.riparazioniIds?.includes(r.id))){
         const fi=costs[r.id];if(!fi)continue;
         const spesa=parseFloat(fi.spesa)||null;const fin=parseFloat(fi.prezzoFinale)||null;
         const isReso=fi.nuovoStato==="reso_non_riparato";
-        await api.updateRepairReturn(r.id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:isReso?null:fin,preventivo:isReso?r.preventivo:fin||r.preventivo,dataRientrata:today()});
+        await api.updateRepairReturn(r.id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:isReso?null:fin,preventivo:isReso?r.preventivo:fin||r.preventivo,dataRientrata});
         const cust=customers.find(c=>c.id===r.customerId);
         if(fi.nuovoStato==="pronto"){if(cust?.telefono)setWaToast({repair:{...r,prezzoFinale:fin??r.prezzoFinale},customer:cust});}
         if(fi.nuovoStato==="reso_non_riparato"&&cust?.telefono){const causale=fi.causale?.trim()||"";const msg=`Gentile ${cust.nome} ${cust.cognome},\nla informiamo che la sua riparazione n° ${r.numero} (${r.descrizione}) ci è stata restituita senza essere riparata.${causale?`\n\nMotivo: ${causale}`:""}\n\nL'oggetto è disponibile per il ritiro.\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;setWaToast({repair:r,customer:cust,customMsg:msg,label:"💬 Avvisa cliente"});}
       }
-      await api.upsertDDT({...ddt,stato:"rientrato",dataRientro:today()});
+      await api.upsertDDT({...ddt,stato:"rientrato",dataRientro:rientroInfo?.ddtRientroData||today(),ddtRientroNumero:rientroInfo?.ddtRientroNumero||ddt.ddtRientroNumero||null});
     });
     await Promise.all([loadRepairs(),loadDDTs()]);
     setDdtReturn(null);setViewDDT(null);

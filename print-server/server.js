@@ -15,7 +15,7 @@ const { exec }  = require('child_process');
 const fs        = require('fs');
 const path      = require('path');
 const os        = require('os');
-const { initWABot, isWAReady } = require('./wa-bot');
+const { initWABot, isWAReady, sendBulkWA } = require('./wa-bot');
 
 const app  = express();
 const PORT = 3001;
@@ -166,6 +166,17 @@ app.post('/print', async (req, res) => {
 /* ── GET /wa-status — stato connessione WhatsApp ─────────────────── */
 app.get('/wa-status', (req, res) => {
   res.json({ ok: isWAReady(), timestamp: new Date().toISOString() });
+});
+
+/* ── POST /wa/send-bulk — invio massivo WA con delay anti-ban ────── */
+app.post('/wa/send-bulk', (req, res) => {
+  const { messages } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0)
+    return res.status(400).json({ error: 'messages array richiesto' });
+  if (!isWAReady())
+    return res.status(503).json({ error: 'WhatsApp non connesso' });
+  res.json({ ok: true, queued: messages.length });
+  sendBulkWA(messages).catch(e => console.error('❌ send-bulk error:', e.message));
 });
 
 /* ── Avvio server ─────────────────────────────────────────────────── */
