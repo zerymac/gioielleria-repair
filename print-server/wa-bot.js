@@ -40,7 +40,19 @@ async function fetchRiparatore(supabase, repairId) {
     .from('ddts')
     .select('*')
     .contains('riparazioni_ids', [repairId]);
-  return ddts?.[0]?.riparatore || null;
+  const rip = ddts?.[0]?.riparatore || null;
+  if (!rip) return null;
+  /* Lo snapshot DDT congela i dati al momento della creazione: se il telefono è stato
+     aggiunto nel registro "repairers" più tardi, qui sarebbe vuoto. Fallback al registro. */
+  if (!rip.telefono && rip.nome) {
+    const { data: reg } = await supabase
+      .from('repairers')
+      .select('telefono')
+      .eq('nome', rip.nome)
+      .maybeSingle();
+    if (reg?.telefono) return { ...rip, telefono: reg.telefono };
+  }
+  return rip;
 }
 
 /* ── Messaggi ── */

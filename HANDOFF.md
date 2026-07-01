@@ -5,6 +5,55 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Funzionalità aggiunte in questa sessione (26/06/2026) — fix multi-device + UX consegna
+
+- **`printServerBase()` helper — fix WA da iPhone**:
+  - Le 3 fetch a `/wa/send-bulk` erano hardcoded `http://localhost:3001` → da iPhone via IP del Mac, `localhost` puntava all'iPhone stesso, la fetch falliva silenziosamente nel `.catch`
+  - Helper deriva URL da `window.location.hostname` (override esplicito via `localStorage.printServerUrl`)
+  - Applicato a `handleRientroRapido`, `handleReturn`, e altro flusso bulk
+  - **Impatto storico**: la sessione 26/06/2026 ha recuperato 18 WA "riparazione pronta" non partiti durante il rientro pomeridiano (inviati via script one-shot a `/wa/send-bulk`)
+
+- **WA bot — fallback registro `repairers` per snapshot DDT senza telefono** (`print-server/wa-bot.js`):
+  - `fetchRiparatore` ora: se lo snapshot DDT ha `telefono:""`, prova a recuperare dal registro `repairers` cercando per `nome`
+  - Causa: il DDT congela i dati riparatore al momento della creazione; se il telefono è stato aggiunto nel registro DOPO, lo snapshot resta vuoto e nessun WA va al riparatore (R2026-0166 e R2026-0188 nella sessione 26/06/2026 — recuperati a mano dall'utente)
+
+- **`ConsegnaModal` — mostra più riparazioni**:
+  - Filtro cambiato da `r.status==="pronto"` a `r.status!=="consegnato"&&r.status!=="presso_esterno"` — adesso include ricevute, in lavorazione, pronte, reso non riparato
+  - Badge stato colorato (`STATUSES[r.status]`) per ogni riga: a colpo d'occhio si distingue pronta vs in lavorazione
+  - Variabile `pronte` rinominata a `daConsegnare` per coerenza semantica
+  - QR scanner stessa logica (`r.status!=="consegnato"&&r.status!=="presso_esterno"`); messaggio "non trovata o non pronta" → "non disponibile alla consegna"
+
+- **QR scanner — fallback foto per iPhone**:
+  - Su iPhone via IP, Safari blocca `getUserMedia` (richiede HTTPS o localhost)
+  - Aggiunto bottone "📸 Scatta foto del QR" che usa `<input type="file" capture="environment">` — apre fotocamera nativa iOS, jsQR decodifica con `inversionAttempts:"attemptBoth"` (tolerante con foto sgranate)
+  - Bottone sempre visibile come alternativa anche su Mac
+
+### Funzionalità aggiunte in questa sessione (26/06/2026) — gestione duplicati clienti
+
+- **Merge duplicati clienti (sostituisce il delete-only)**:
+  - `DuplicatesModal` ora **unisce** invece di cancellare: tap sul cliente da tenere → diventa primario, gli altri vengono uniti su di lui (riparazioni + ordini spostati, anagrafiche duplicate eliminate)
+  - Primario di default = cliente con più riparazioni+ordini del gruppo
+  - Bottone "Salta gruppo" per escludere un gruppo dall'unione
+  - Badge `PRIMARIO` verde + conteggi `N rip.` / `N ord.` per ogni cliente
+  - Riapre `loadCustomers/loadRepairs/loadOrders` alla chiusura per refresh esplicito
+
+- **`api.mergeCustomers(primaryId, duplicateIds)`**:
+  - `UPDATE repairs SET customer_id=primary WHERE customer_id=duplicate`
+  - `UPDATE orders  SET customer_id=primary WHERE customer_id=duplicate`
+  - `DELETE FROM customers WHERE id=duplicate`
+  - Sequenziale per ogni duplicate; loggato `console.error` su singolo fallimento
+
+- **Anti-doppione in inserimento (blocco bloccante)**:
+  - Componente riutilizzabile `DuplicateWarning` (popup ⚠️ con cliente esistente + bottoni "Usa questo cliente" / "Annulla")
+  - Helper `findDuplicateCustomer(customers, c, excludeId)` — match per nome+cognome OPPURE telefono normalizzati; `excludeId` evita di matchare se stesso in edit mode
+  - Integrato in 3 punti d'inserimento:
+    - **`RepairWizard`** step 1 → al click "Aggiungi" nuovo cliente
+    - **`OrderForm`** step 1 → al click "Aggiungi" nuovo cliente
+    - **`CustomerForm`** standalone → al click "Salva" (sia nuovo sia edit, edit usa `excludeId=f.id`)
+  - Dal `CustomerForm` "Usa questo cliente" apre direttamente `CustomerDetail` del cliente esistente (`onSelectExisting`); dai wizard seleziona l'esistente e prosegue allo step successivo
+
+- **Rimosso `handleBulkDeleteCustomer`** (dead code dopo refactor merge)
+
 ### Funzionalità aggiunte in questa sessione (25/06/2026) — terza parte
 
 - **WA automatico su cambio stato prodotto → arrivato**:
@@ -233,6 +282,57 @@ alter table public.repairers add column if not exists cap text;
 - **Migrazione dati da ProWeb**: export CSV → import script Node → Supabase
 - **Strategia codice**: estrarre `shared.js` prima di aggiungere nuovi moduli
 
+### Strategia git per sviluppo gestionale (decisa 25/06/2026, affinata 26/06/2026)
+- **`gestionale`** rimane il branch in produzione che il negozio usa ogni giorno — deve sempre funzionare
+- **Funzionalità grandi** (catalogo prodotti, vendite, Shopify, metalli) → branch separato `feature/<nome>` → merge su `gestionale` solo quando stabile
+- **Piccole modifiche/fix** → commit diretto su `gestionale`
+- **`main`** → backup ultra-stabile, merge da `gestionale` ogni tanto
+
+### Worktree per sviluppo parallelo (26/06/2026 — da configurare)
+Problema: l'app gira da `npm start` su `localhost:3000` e Adriana la usa quotidianamente. Cambiare branch nella cartella principale modifica i file sotto i piedi all'app in uso.
+
+Soluzione: **git worktree** — due cartelle parallele, due branch, due porte:
+```
+~/gioielleria-repair/    → branch gestionale, porta 3000 (negozio)
+~/gestionale-dev/        → branch feature/gestionale, porta 3001 (sviluppo)
+```
+
+Comandi setup:
+```bash
+cd ~/gioielleria-repair
+git worktree add ../gestionale-dev -b feature/gestionale
+cd ../gestionale-dev
+npm install
+PORT=3001 npm start
+```
+
+Vantaggi:
+- Il negozio non viene mai impattato da errori di sviluppo
+- Entrambe le app girano contemporaneamente su porte diverse
+- Merge sicuro solo quando la feature è stabile e testata
+- Nessun branch switching necessario
+
+### Roadmap gestionale per fasi
+- **Fase 1** — Fondamenta dati: tabelle Supabase + tab "Prodotti" sola lista, senza toccare riparazioni
+- **Fase 2** — Carico prodotti: form inserimento + import CSV da ProWeb
+- **Fase 3** — Vendite: carrello → ricevuta → aggiornamento giacenza
+- **Fase 4** — Quotazione metalli: API GoldAPI.io + calcolatrice peso/titolo
+
+## What Worked (aggiornato 26/06/2026 — fix multi-device)
+- **`window.location.hostname` per derivare l'URL del server di stampa/WA**: meglio di un override fisso da Impostazioni — l'app "funziona e basta" sia su localhost (Mac) sia via IP (iPhone). L'override `localStorage.printServerUrl` resta per casi particolari (es. tunnel).
+- **Fallback registro `repairers` quando lo snapshot DDT è vuoto**: cercare per `nome` con `.maybeSingle()` (no error se non trovato) — pattern semplice che salva i WA quando il telefono viene aggiunto al riparatore DOPO la creazione del DDT.
+- **`<input type="file" capture="environment">` per QR su iPhone via IP**: getUserMedia richiede HTTPS, ma la capture nativa iOS no. Pattern affidabile per qualsiasi feature camera quando non si vuole gestire SSL.
+- **Mostrare badge stato nella ConsegnaModal**: ampliare il filtro (mostrare anche le non-pronte) sarebbe stato confuso senza il badge — con il colore dello stato l'utente sa subito cosa stanno prendendo.
+- **Recupero one-shot via script Node + `/wa/send-bulk`**: per riparazioni già rientrate ma con WA persi, query Supabase → costruisci messaggi → POST batch. Pattern riusabile per altre emergenze.
+
+## What Worked (aggiornato 26/06/2026 — duplicati clienti)
+- **Merge invece di delete per i duplicati**: cancellare e basta orfanava le riparazioni; trasformare la modal in tap-per-scegliere-il-primario + UPDATE customer_id ha eliminato il problema senza forzare l'utente a scegliere "chi cancellare".
+- **Default primario su chi ha più rip.+ord.**: heuristic giusta perché di solito il duplicato "buono" è quello effettivamente usato per anni.
+- **`DuplicateWarning` come componente unico**: stesso popup riusato in 3 punti (`RepairWizard`, `OrderForm`, `CustomerForm`) — evita di duplicare la UX e mantiene il flow coerente.
+- **`excludeId` in `findDuplicateCustomer`**: necessario in `CustomerForm` edit mode, altrimenti il check matcha il cliente che stai modificando con se stesso.
+- **`onSelectExisting` solo da `CustomerForm`**: dal form standalone "Usa questo cliente" apre il dettaglio (più utile per consultare/modificare); dai wizard invece seleziona e prosegue al prossimo step.
+- **Match nome+cognome OPPURE telefono normalizzato**: copre i 2 casi reali — stesso cliente reinserito perché non lo trovi nella ricerca, oppure stesso numero con scrittura nome leggermente diversa (Sig. → Sig.ra, Maria Antonietta → M. Antonietta).
+
 ## What Worked (aggiornato 25/06/2026 — terza parte)
 - **Stato ordine sempre derivato dai prodotti**: rimuovere il pulsante "Avanza stato" ordine-level ed usare solo il pill per-prodotto elimina l'incoerenza — il `nuovoStato` si calcola con `every/some` sui `prodotti` aggiornati prima di `upsertOrder`.
 - **`viewOrder` come fonte primaria in `handleOrderProductStatus`**: `(viewOrder?.id===orderId ? viewOrder : orders.find(...))` evita di leggere dallo stato Realtime stantio e sovrascrivere il nuovo stato con il vecchio.
@@ -273,6 +373,9 @@ alter table public.repairers add column if not exists cap text;
 - **`repair_id uuid`** in quote_tokens: gli ID riparazioni non sono UUID standard; cambiare in `text`.
 - **`(crypto.randomUUID??fallback)()`**: perde il binding `this` — usare try/catch IIFE.
 - **WA al negozio bloccato da early return**: ristrutturare `handleAccepted` per non fare `return` dopo il blocco riparatore, continuare sempre verso il WA negozio.
+- **`http://localhost:3001` hardcoded nelle fetch dal client**: da iPhone via IP del Mac `localhost` è l'iPhone stesso, le fetch fallivano nel `.catch` senza messaggio visibile. Usare sempre `printServerBase()` (derivato da `window.location.hostname`).
+- **`getUserMedia` da iPhone via IP**: Safari blocca camera senza HTTPS — implementare fallback `<input type="file" capture>`.
+- **Snapshot DDT congelato**: il `riparatore` dentro `ddts` è una copia, non un FK al registro. Telefoni aggiunti al registro `repairers` dopo la creazione DDT non risalgono → fallback per nome nel bot WA.
 
 ## Next Steps
 - Acquistare stampante Zebra ZD421 (o TSC TE310) WiFi

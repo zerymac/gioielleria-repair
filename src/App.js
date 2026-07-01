@@ -15,6 +15,21 @@ const matchCustomer = (c, q) => {
     (c.email||"").toLowerCase().includes(w)
   );
 };
+const normName = (s) => (s||"").trim().toLowerCase().replace(/\s+/g," ");
+const normTel  = (s) => (s||"").replace(/\D/g,"");
+const findDuplicateCustomer = (customers, c, excludeId=null) => {
+  const nName = `${normName(c.nome)} ${normName(c.cognome)}`.trim();
+  const nTel  = normTel(c.telefono);
+  if(!nName && !nTel) return null;
+  return customers.find(x => {
+    if(excludeId && x.id===excludeId) return false;
+    const xName = `${normName(x.nome)} ${normName(x.cognome)}`.trim();
+    const xTel  = normTel(x.telefono);
+    if(nName && xName && xName===nName) return true;
+    if(nTel  && xTel  && xTel===nTel ) return true;
+    return false;
+  }) || null;
+};
 const today = () => new Date().toISOString().split("T")[0];
 const repNum = (n) => `R${new Date().getFullYear()}-${String(n).padStart(4, "0")}`;
 const ddtNum = (n) => `DDT${new Date().getFullYear()}-${String(n).padStart(4, "0")}`;
@@ -150,6 +165,18 @@ const api = {
   },
   async deleteRepairer(id) { await supabase.from("repairers").delete().eq("id",id); },
   async deleteCustomer(id) { await supabase.from("customers").delete().eq("id",id); },
+  async mergeCustomers(primaryId, duplicateIds) {
+    if(!primaryId||!duplicateIds?.length)return;
+    for(const dup of duplicateIds){
+      if(dup===primaryId)continue;
+      const {error:eRep}=await supabase.from("repairs").update({customer_id:primaryId}).eq("customer_id",dup);
+      if(eRep)console.error("mergeCustomers repairs:",eRep);
+      const {error:eOrd}=await supabase.from("orders").update({customer_id:primaryId}).eq("customer_id",dup);
+      if(eOrd)console.error("mergeCustomers orders:",eOrd);
+      const {error:eDel}=await supabase.from("customers").delete().eq("id",dup);
+      if(eDel)console.error("mergeCustomers delete:",eDel);
+    }
+  },
   async getOrders() { const {data}=await supabase.from("orders").select("*").order("created_at",{ascending:false}); return (data||[]).map(toOrder); },
   async upsertOrder(o) {
     const cleanNum=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
@@ -255,6 +282,14 @@ function printHTML(html) {
 const isIOS = (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
                (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) &&
               !window.MSStream;
+
+/* ── URL print server: override esplicito da localStorage, altrimenti host corrente:3001 ── */
+const printServerBase = () => {
+  const override = (localStorage.getItem('printServerUrl') || '').trim().replace(/\/$/, '');
+  if (override) return override;
+  const host = window.location.hostname || 'localhost';
+  return `http://${host}:3001`;
+};
 
 /* ── Stampa intelligente: server su iOS/iPadOS, dialogo nativo su Mac ── */
 function smartPrint(html) {
@@ -931,13 +966,14 @@ function RingDetailModal({form,set,onConfirm,onSkip}) {
 }
 
 /* ── Wizard ── */
-function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
+function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCustomer}) {
   const TOTAL=7;
   const [step,setStep]=useState(0);
   const [form,setForm]=useState({operatore:"",customerId:"",categoria:"",tipoLavoro:"",descrizione:"",materiali:"",marca:"",referenza:"",problema:"",preventivo:"",notaPreventivo:"",preventivoAccettato:false,richiestaPreventivo:false,riparazioneInterna:false,inGaranzia:false,dataConsegna:"",note:"",fotoUrl:"",fotoBlob:null,mano:"",dito:"",items:[]});
   const [search,setSearch]=useState("");
   const [showNew,setShowNew]=useState(false);
   const [newC,setNewC]=useState({nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",codiceFiscale:""});
+  const [dupWarn,setDupWarn]=useState(null);
   const [docB64,setDocB64]=useState(null); const [docMsg,setDocMsg]=useState(""); const [docLoad,setDocLoad]=useState(false);
   const [aiLoad,setAiLoad]=useState(false); const [aiMsg,setAiMsg]=useState("");
   const [imgPreview,setImgPreview]=useState(null);
@@ -1046,7 +1082,7 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
               <IOSInput placeholder="Codice Fiscale" value={newC.codiceFiscale||""} onChange={e=>setNewC(c=>({...c,codiceFiscale:e.target.value.toUpperCase()}))}/>
               <div style={{display:"flex",gap:8}}>
                 <Btn label="Annulla" variant="secondary" full onClick={()=>setShowNew(false)}/>
-                <Btn label="Aggiungi →" full disabled={!newC.nome||!newC.cognome} onClick={()=>onAddedCustomer({...newC,id:uid()},(id)=>{set("customerId",id);setStep(2);setShowNew(false);})}/>
+                <Btn label="Aggiungi →" full disabled={!newC.nome||!newC.cognome} onClick={()=>{const dup=findDuplicateCustomer(customers,newC);if(dup){setDupWarn(dup);return;}onAddedCustomer({...newC,id:uid()},(id)=>{set("customerId",id);setStep(2);setShowNew(false);});}}/>
               </div>
             </div>
           </IOSCard>
@@ -1063,6 +1099,8 @@ function RepairWizard({customers,onSave,onClose,onAddedCustomer}) {
         ))}</IOSCard>}
         <div style={{height:20}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(0)}/><Btn label="Avanti →" disabled={!form.customerId} full onClick={()=>setStep(2)}/></div>
       </div>}
+
+      {dupWarn&&<DuplicateWarning existing={dupWarn} repairCount={repairs.filter(r=>r.customerId===dupWarn.id).length} orderCount={orders.filter(o=>o.customerId===dupWarn.id).length} onUse={()=>{set("customerId",dupWarn.id);setStep(2);setShowNew(false);setDupWarn(null);}} onCancel={()=>setDupWarn(null)}/>}
 
       {/* STEP 2 */}
       {step===2&&<div>
@@ -1235,8 +1273,8 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
   const [done,setDone]=useState(false);
   const [qrMsg,setQrMsg]=useState("");     // feedback QR inline
 
-  const pronte=repairs.filter(r=>r.status==="pronto");
-  const filtered=pronte.filter(r=>{
+  const daConsegnare=repairs.filter(r=>r.status!=="consegnato"&&r.status!=="presso_esterno");
+  const filtered=daConsegnare.filter(r=>{
     if(!q)return true;
     const l=q.toLowerCase();
     const c=customers.find(x=>x.id===r.customerId);
@@ -1254,11 +1292,12 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
     });
   };
 
-  const selRepairs=pronte.filter(r=>selIds.includes(r.id));
+  const selRepairs=daConsegnare.filter(r=>selIds.includes(r.id));
   const selCustomer=lockedCid?customers.find(x=>x.id===lockedCid):null;
 
   /* ── QR Camera ── */
   const videoRef=useRef();const canvasRef=useRef();const rafRef=useRef();const streamRef=useRef();
+  const photoInputRef=useRef();
   const lastScanned=useRef(null);
   const [camErr,setCamErr]=useState(null);
   const hasBD="BarcodeDetector" in window;
@@ -1266,8 +1305,8 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
   const handleDetected=useCallback((data)=>{
     const num=(data||"").trim().toUpperCase().match(/R\d{4}-\d{4}/)?.[0];
     if(!num||num===lastScanned.current)return false;
-    const rep=repairs.find(r=>r.numero===num&&r.status==="pronto");
-    if(!rep){setQrMsg("⚠️ "+num+": non trovata o non pronta");setTimeout(()=>setQrMsg(""),2000);return false;}
+    const rep=repairs.find(r=>r.numero===num&&r.status!=="consegnato"&&r.status!=="presso_esterno");
+    if(!rep){setQrMsg("⚠️ "+num+": non disponibile alla consegna");setTimeout(()=>setQrMsg(""),2000);return false;}
     if(lockedCid&&rep.customerId!==lockedCid){
       const c=customers.find(x=>x.id===rep.customerId);
       setQrMsg("⛔ "+num+": cliente diverso ("+(c?.cognome||"?")+")");
@@ -1321,6 +1360,31 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
 
   useEffect(()=>{if(tab!=="qr")stopCam();},[tab,stopCam]);
 
+  /* Fallback iOS via IP (no HTTPS → getUserMedia bloccato): scatta foto del QR e decodifica */
+  const handleQRPhoto=(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    e.target.value="";
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      const img=new Image();
+      img.onload=()=>{
+        const c=document.createElement("canvas");
+        const MAX=1600;
+        const scale=Math.min(1,MAX/Math.max(img.width,img.height));
+        c.width=img.width*scale;c.height=img.height*scale;
+        const ctx=c.getContext("2d");
+        ctx.drawImage(img,0,0,c.width,c.height);
+        const id=ctx.getImageData(0,0,c.width,c.height);
+        const code=jsQR(id.data,id.width,id.height,{inversionAttempts:"attemptBoth"});
+        if(code){lastScanned.current=null;handleDetected(code.data);}
+        else {setQrMsg("⚠️ Nessun QR riconosciuto nella foto");setTimeout(()=>setQrMsg(""),2500);}
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleClose=()=>{stopCam();onClose();};
 
   const doConsegna=()=>{
@@ -1339,6 +1403,7 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
     const c=customers.find(x=>x.id===r.customerId);
     const sel=selIds.includes(r.id);
     const disabled=!sel&&lockedCid&&r.customerId!==lockedCid;
+    const st=STATUSES[r.status];
     return(
       <button onClick={()=>toggle(r)} disabled={!!disabled}
         style={{width:"100%",background:sel?"#ECFDF5":C.white,border:sel?"2px solid #059669":"2px solid transparent",borderRadius:14,padding:"11px 14px",cursor:disabled?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",boxShadow:"0 1px 3px rgba(0,0,0,.07)",opacity:disabled?.35:1,boxSizing:"border-box"}}>
@@ -1349,6 +1414,7 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
           <div style={{fontSize:14,fontWeight:700,color:C.label}}>{r.numero}</div>
           <div style={{fontSize:12,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descrizione}{c&&!sel?" · "+c.cognome:""}</div>
         </div>
+        {st&&<span style={{fontSize:10,fontWeight:700,color:st.color,background:st.bg,padding:"3px 8px",borderRadius:8,flexShrink:0,whiteSpace:"nowrap"}}>{st.label}</span>}
         {disabled&&<span style={{fontSize:11,color:C.secondary,flexShrink:0}}>altro cliente</span>}
       </button>
     );
@@ -1376,8 +1442,8 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
 
       {/* ── TAB: Lista (raggruppata per cliente) ── */}
       {tab==="lista"&&!done&&(()=>{
-        if(pronte.length===0)return <div style={{textAlign:"center",padding:"40px 20px",color:C.secondary}}><div style={{fontSize:48,marginBottom:8}}>✅</div><div style={{fontWeight:600}}>Nessuna riparazione pronta</div></div>;
-        const groups=Object.values(pronte.reduce((acc,r)=>{if(!acc[r.customerId])acc[r.customerId]=[];acc[r.customerId].push(r);return acc;},{}));
+        if(daConsegnare.length===0)return <div style={{textAlign:"center",padding:"40px 20px",color:C.secondary}}><div style={{fontSize:48,marginBottom:8}}>✅</div><div style={{fontWeight:600}}>Nessuna riparazione da consegnare</div></div>;
+        const groups=Object.values(daConsegnare.reduce((acc,r)=>{if(!acc[r.customerId])acc[r.customerId]=[];acc[r.customerId].push(r);return acc;},{}));
         return(
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             {groups.map(group=>{
@@ -1399,7 +1465,7 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
         <>
           <input autoFocus placeholder="Cerca per numero o cliente…" value={q} onChange={e=>setQ(e.target.value)}
             style={{width:"100%",background:C.white,border:"none",borderRadius:12,padding:"12px 14px",fontSize:15,fontFamily:"-apple-system,sans-serif",boxShadow:"0 1px 3px rgba(0,0,0,.07)",outline:"none",marginBottom:12,boxSizing:"border-box"}}/>
-          {q&&filtered.length===0&&<div style={{textAlign:"center",padding:20,color:C.secondary}}>Nessuna riparazione pronta trovata</div>}
+          {q&&filtered.length===0&&<div style={{textAlign:"center",padding:20,color:C.secondary}}>Nessuna riparazione trovata</div>}
           <div style={{display:"flex",flexDirection:"column",gap:8}}>{filtered.map(r=><RepRow key={r.id} r={r}/>)}</div>
         </>
       )}
@@ -1409,7 +1475,11 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
         <>
           <div style={{borderRadius:16,overflow:"hidden",background:"#000",aspectRatio:"4/3",position:"relative",marginBottom:10}}>
             {camErr
-              ?<div style={{color:"white",fontSize:13,padding:20,textAlign:"center",paddingTop:60}}>{camErr}</div>
+              ?<div style={{color:"white",fontSize:13,padding:20,textAlign:"center",paddingTop:40,display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                <div style={{fontSize:36}}>📷</div>
+                <div>{camErr}</div>
+                {camErr&&qrMsg&&<div style={{fontSize:12,color:qrMsg.startsWith("✅")?"#86EFAC":"#FCA5A5"}}>{qrMsg}</div>}
+              </div>
               :<>
                 <video ref={videoRef} playsInline muted style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                 <canvas ref={canvasRef} style={{display:"none"}}/>
@@ -1427,6 +1497,10 @@ function ConsegnaModal({repairs,customers,onConsegna,onClose}) {
               </>
             }
           </div>
+          <button onClick={()=>photoInputRef.current?.click()} style={{width:"100%",background:"#1C1C1E",color:"white",border:"none",borderRadius:14,padding:"12px 16px",fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            📸 Scatta foto del QR
+          </button>
+          <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleQRPhoto}/>
           {selIds.length>0&&(
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               <div style={{fontSize:12,fontWeight:700,color:C.secondary,marginBottom:2}}>Scansionate:</div>
@@ -2187,12 +2261,18 @@ function CustomerDetail({customer:c,repairs,onClose,onEdit,onOpenRepair,onReceip
 }
 
 /* ── Customer Form ── */
-function CustomerForm({customer,onSave,onClose}) {
+function CustomerForm({customer,customers=[],repairs=[],orders=[],onSelectExisting,onSave,onClose}) {
   const [f,setF]=useState(customer||{nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",indirizzo:"",codiceFiscale:"",note:""});
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
   const [imgB64,setImgB64]=useState(null);const [aiLoad,setAiLoad]=useState(false);const [msg,setMsg]=useState("");
+  const [dupWarn,setDupWarn]=useState(null);
   const ref=useRef();
   const scan=async()=>{if(!imgB64)return;setAiLoad(true);const res=await aiCall('Analizza documento d\'identità italiano. SOLO JSON: {"nome":"","cognome":"","codiceFiscale":"","indirizzo":""}',imgB64);if(!res){setMsg("⚠️ AI non configurata");setAiLoad(false);return;}try{const j=JSON.parse(res.replace(/```json|```/g,"").trim());setF(x=>({...x,nome:j.nome||x.nome,cognome:j.cognome||x.cognome,codiceFiscale:j.codiceFiscale||x.codiceFiscale,indirizzo:j.indirizzo||x.indirizzo}));setMsg("✅ Dati estratti");}catch{setMsg("⚠️ Inserisci manualmente");}setAiLoad(false);};
+  const handleSaveClick=()=>{
+    const dup=findDuplicateCustomer(customers,f,f.id||null);
+    if(dup){setDupWarn(dup);return;}
+    onSave(f);
+  };
   return (
     <Sheet onClose={onClose} title={customer?"Modifica Cliente":"Nuovo Cliente"}>
       {aiEnabled&&(<div style={{background:"#F0F4FF",borderRadius:14,padding:12,marginBottom:16,border:"1px solid #C7D2FE"}}><div style={{fontSize:12,fontWeight:700,color:"#3B5EDB",marginBottom:8}}>🤖 Scansione documento d'identità</div><div style={{display:"flex",gap:8}}><button onClick={()=>ref.current.click()} style={{flex:1,border:"1px solid #C7D2FE",borderRadius:10,padding:10,background:"white",color:"#3B5EDB",fontSize:13,fontWeight:600,cursor:"pointer"}}>{imgB64?"📄 ✓ Caricato":"📷 Carica doc"}</button><button onClick={scan} disabled={!imgB64||aiLoad} style={{flex:1,background:"#3B5EDB",color:"white",border:"none",borderRadius:10,padding:10,fontSize:13,fontWeight:700,cursor:"pointer",opacity:(!imgB64||aiLoad)?.4:1}}>{aiLoad?"⏳…":"🔍 Leggi AI"}</button></div><input ref={ref} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const fi=e.target.files?.[0];if(!fi)return;const r=new FileReader();r.onload=ev=>setImgB64(ev.target.result.split(",")[1]);r.readAsDataURL(fi);}}/>{msg&&<div style={{fontSize:12,color:"#3B5EDB",marginTop:6}}>{msg}</div>}</div>)}
@@ -2203,13 +2283,46 @@ function CustomerForm({customer,onSave,onClose}) {
         <IOSInput placeholder="Indirizzo" value={f.indirizzo||""} onChange={e=>set("indirizzo",e.target.value)}/>
         <IOSInput placeholder="Codice Fiscale" value={f.codiceFiscale||""} onChange={e=>set("codiceFiscale",e.target.value.toUpperCase())}/>
       </div>
-      <div style={{display:"flex",gap:10}}><Btn label="Annulla" variant="secondary" full onClick={onClose}/><Btn label="Salva" full disabled={!f.nome||!f.cognome} onClick={()=>onSave(f)}/></div>
+      <div style={{display:"flex",gap:10}}><Btn label="Annulla" variant="secondary" full onClick={onClose}/><Btn label="Salva" full disabled={!f.nome||!f.cognome} onClick={handleSaveClick}/></div>
+      {dupWarn&&<DuplicateWarning existing={dupWarn} repairCount={repairs.filter(r=>r.customerId===dupWarn.id).length} orderCount={orders.filter(o=>o.customerId===dupWarn.id).length} onUse={()=>{setDupWarn(null);if(onSelectExisting)onSelectExisting(dupWarn);else onClose();}} onCancel={()=>setDupWarn(null)}/>}
     </Sheet>
   );
 }
 
+/* ── Avviso cliente duplicato in inserimento ── */
+function DuplicateWarning({existing,repairCount=0,orderCount=0,onUse,onCancel}) {
+  return (
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:20,padding:24,maxWidth:380,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:48,marginBottom:8}}>⚠️</div>
+          <div style={{fontSize:18,fontWeight:800,color:"#1c1c1e",marginBottom:6}}>Cliente già presente</div>
+          <div style={{fontSize:14,color:"#6B7280"}}>Esiste già un cliente con questi dati. Per evitare doppioni, usa l'anagrafica esistente.</div>
+        </div>
+        <div style={{background:"#F9FAFB",borderRadius:14,padding:14,marginBottom:16,border:"1px solid #E5E7EB"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:44,height:44,borderRadius:22,background:"#B8860B",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:"white",flexShrink:0}}>{existing.nome?.[0]}{existing.cognome?.[0]}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#1c1c1e"}}>{existing.nome} {existing.cognome}</div>
+              <div style={{fontSize:13,color:"#6B7280"}}>{displayPhone(existing)||existing.email||"—"}</div>
+              {(repairCount>0||orderCount>0)&&<div style={{display:"flex",gap:6,marginTop:6}}>
+                {repairCount>0&&<span style={{fontSize:11,background:"#EFF6FF",color:"#1D4ED8",padding:"2px 7px",borderRadius:8,fontWeight:700}}>{repairCount} rip.</span>}
+                {orderCount>0&&<span style={{fontSize:11,background:"#FEF3C7",color:"#92400E",padding:"2px 7px",borderRadius:8,fontWeight:700}}>{orderCount} ord.</span>}
+              </div>}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <Btn label="✓ Usa questo cliente" full onClick={onUse}/>
+          <Btn label="Annulla" variant="secondary" full onClick={onCancel}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Gestione Duplicati ── */
-function DuplicatesModal({customers,repairs,onDelete,onClose}) {
+function DuplicatesModal({customers,repairs,orders,onMerge,onClose}) {
   const normKey=(c)=>`${(c.nome||"").trim().toLowerCase()} ${(c.cognome||"").trim().toLowerCase()}`.trim();
 
   /* Raggruppa per nome normalizzato */
@@ -2242,24 +2355,41 @@ function DuplicatesModal({customers,repairs,onDelete,onClose}) {
     if(!already)allGroups.push(pg);
   });
 
-  /* Seleziona di default tutti tranne il primo per ogni gruppo */
-  const [toDelete,setToDelete]=useState(()=>{
-    const set=new Set();
-    allGroups.forEach(g=>{g.slice(1).forEach(c=>set.add(c.id));});
-    return set;
-  });
-  const [deleting,setDeleting]=useState(false);
+  const repCount=(id)=>repairs.filter(r=>r.customerId===id).length;
+  const ordCount=(id)=>(orders||[]).filter(o=>o.customerId===id).length;
 
-  const toggle=(id)=>setToDelete(prev=>{
-    const n=new Set(prev);
-    n.has(id)?n.delete(id):n.add(id);
-    return n;
+  /* Primario per gruppo: di default chi ha più riparazioni (o il primo) */
+  const [primaryByGroup,setPrimaryByGroup]=useState(()=>{
+    const m={};
+    allGroups.forEach((g,gi)=>{
+      const best=[...g].sort((a,b)=>(repCount(b.id)+ordCount(b.id))-(repCount(a.id)+ordCount(a.id)))[0];
+      m[gi]=best.id;
+    });
+    return m;
   });
+  const [skipGroups,setSkipGroups]=useState(new Set());
+  const [merging,setMerging]=useState(false);
 
-  const handleDelete=async()=>{
-    setDeleting(true);
-    for(const id of toDelete) await onDelete(id);
-    setDeleting(false);
+  const toggleSkip=(gi)=>setSkipGroups(prev=>{const n=new Set(prev);n.has(gi)?n.delete(gi):n.add(gi);return n;});
+
+  const groupsToMerge=allGroups.filter((_,gi)=>!skipGroups.has(gi));
+  const totalDups=groupsToMerge.reduce((s,g,i)=>{
+    const gi=allGroups.indexOf(g);
+    const pid=primaryByGroup[gi];
+    return s+g.filter(c=>c.id!==pid).length;
+  },0);
+
+  const handleMerge=async()=>{
+    if(!window.confirm(`Confermi unione di ${totalDups} clienti duplicati?\n\nLe riparazioni e gli ordini verranno spostati sul cliente "primario" scelto.`))return;
+    setMerging(true);
+    for(let gi=0; gi<allGroups.length; gi++){
+      if(skipGroups.has(gi))continue;
+      const group=allGroups[gi];
+      const primaryId=primaryByGroup[gi];
+      const dupIds=group.filter(c=>c.id!==primaryId).map(c=>c.id);
+      if(dupIds.length) await onMerge(primaryId,dupIds);
+    }
+    setMerging(false);
     onClose();
   };
 
@@ -2274,50 +2404,60 @@ function DuplicatesModal({customers,repairs,onDelete,onClose}) {
     </Sheet>
   );
 
-  const repCount=(id)=>repairs.filter(r=>r.customerId===id).length;
-
   return (
-    <Sheet onClose={onClose} title="🔍 Duplicati clienti">
+    <Sheet onClose={onClose} title="🔗 Unisci duplicati">
       <div style={{fontSize:14,color:"#6B7280",marginBottom:16}}>
-        Trovati <strong>{allGroups.length} gruppi</strong> con clienti duplicati. Seleziona quelli da eliminare (i selezionati verranno cancellati).
+        Trovati <strong>{allGroups.length} gruppi</strong> di clienti duplicati. Tocca il cliente da <strong>tenere</strong> (primario): gli altri verranno uniti su di lui — riparazioni e ordini spostati, anagrafiche duplicate eliminate.
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:20}}>
-        {allGroups.map((group,gi)=>(
-          <div key={gi} style={{background:"#F9FAFB",borderRadius:14,padding:12,border:"1px solid #E5E7EB"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>
-              Gruppo {gi+1} — {group.length} clienti
-            </div>
-            {group.map((c,ci)=>{
-              const sel=toDelete.has(c.id);
-              const nRep=repCount(c.id);
-              return (
-                <button key={c.id} onClick={()=>toggle(c.id)}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
-                    background:sel?"#FEE2E2":"white",borderRadius:10,
-                    border:sel?"1px solid #FCA5A5":"1px solid #E5E7EB",
-                    marginBottom:ci<group.length-1?6:0,cursor:"pointer",textAlign:"left"}}>
-                  <div style={{width:22,height:22,borderRadius:11,border:`2px solid ${sel?"#EF4444":"#D1D5DB"}`,
-                    background:sel?"#EF4444":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    {sel&&<span style={{color:"white",fontSize:13,fontWeight:800}}>✕</span>}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:"#1c1c1e"}}>{c.nome} {c.cognome}</div>
-                    <div style={{fontSize:12,color:"#6B7280"}}>{displayPhone(c)||c.email||"—"}</div>
-                  </div>
-                  {nRep>0&&<span style={{fontSize:11,background:"#EFF6FF",color:"#1D4ED8",padding:"2px 7px",borderRadius:8,fontWeight:700,flexShrink:0}}>{nRep} rip.</span>}
-                  {ci===0&&<span style={{fontSize:10,background:"#ECFDF5",color:"#059669",padding:"2px 7px",borderRadius:8,fontWeight:700,flexShrink:0}}>primo</span>}
+        {allGroups.map((group,gi)=>{
+          const primaryId=primaryByGroup[gi];
+          const skipped=skipGroups.has(gi);
+          return (
+            <div key={gi} style={{background:skipped?"#F3F4F6":"#F9FAFB",borderRadius:14,padding:12,border:"1px solid #E5E7EB",opacity:skipped?.55:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".5px"}}>
+                  Gruppo {gi+1} — {group.length} clienti
+                </div>
+                <button onClick={()=>toggleSkip(gi)} style={{background:"none",border:"none",color:skipped?"#059669":"#9CA3AF",fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
+                  {skipped?"↺ Riattiva":"⊘ Salta gruppo"}
                 </button>
-              );
-            })}
-          </div>
-        ))}
+              </div>
+              {group.map((c,ci)=>{
+                const isPrimary=c.id===primaryId;
+                const nRep=repCount(c.id);
+                const nOrd=ordCount(c.id);
+                return (
+                  <button key={c.id} onClick={()=>!skipped&&setPrimaryByGroup(p=>({...p,[gi]:c.id}))}
+                    disabled={skipped}
+                    style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
+                      background:isPrimary?"#ECFDF5":"white",borderRadius:10,
+                      border:isPrimary?"2px solid #10B981":"1px solid #E5E7EB",
+                      marginBottom:ci<group.length-1?6:0,cursor:skipped?"default":"pointer",textAlign:"left"}}>
+                    <div style={{width:22,height:22,borderRadius:11,border:`2px solid ${isPrimary?"#10B981":"#D1D5DB"}`,
+                      background:isPrimary?"#10B981":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {isPrimary&&<span style={{color:"white",fontSize:13,fontWeight:800}}>✓</span>}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:600,color:"#1c1c1e"}}>{c.nome} {c.cognome}</div>
+                      <div style={{fontSize:12,color:"#6B7280"}}>{displayPhone(c)||c.email||"—"}</div>
+                    </div>
+                    {nRep>0&&<span style={{fontSize:11,background:"#EFF6FF",color:"#1D4ED8",padding:"2px 7px",borderRadius:8,fontWeight:700,flexShrink:0}}>{nRep} rip.</span>}
+                    {nOrd>0&&<span style={{fontSize:11,background:"#FEF3C7",color:"#92400E",padding:"2px 7px",borderRadius:8,fontWeight:700,flexShrink:0}}>{nOrd} ord.</span>}
+                    {isPrimary&&<span style={{fontSize:10,background:"#10B981",color:"white",padding:"2px 7px",borderRadius:8,fontWeight:700,flexShrink:0}}>PRIMARIO</span>}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
-      <div style={{background:"#FFF1F2",borderRadius:12,padding:12,marginBottom:16,fontSize:13,color:"#B91C1C"}}>
-        ⚠️ Verranno eliminati <strong>{toDelete.size} clienti</strong>. Le riparazioni associate verranno orfanate.
+      <div style={{background:"#ECFDF5",borderRadius:12,padding:12,marginBottom:16,fontSize:13,color:"#065F46"}}>
+        🔗 Verranno uniti <strong>{totalDups} duplicati</strong> sui rispettivi primari. Tutte le riparazioni e ordini restano collegati.
       </div>
       <div style={{display:"flex",gap:10}}>
         <Btn label="Annulla" variant="secondary" full onClick={onClose}/>
-        <Btn label={deleting?"⏳ Eliminazione…":`🗑️ Elimina ${toDelete.size}`} full disabled={toDelete.size===0||deleting} onClick={handleDelete}/>
+        <Btn label={merging?"⏳ Unione…":`🔗 Unisci ${totalDups}`} full disabled={totalDups===0||merging} onClick={handleMerge}/>
       </div>
     </Sheet>
   );
@@ -3122,7 +3262,7 @@ function OrdersPage({orders,customers,onView,onNew,onConsegna}) {
   );
 }
 
-function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
+function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedCustomer}) {
   const TOTAL=7;
   const isEdit=!!order?.id;
   const [step,setStep]=useState(isEdit?6:0);
@@ -3154,6 +3294,7 @@ function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
   });
   const [showNew,setShowNew]=useState(false);
   const [newC,setNewC]=useState({nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",codiceFiscale:""});
+  const [dupWarn,setDupWarn]=useState(null);
   const fotoRef=useRef();
   const [imgPreview,setImgPreview]=useState(null);
   const [saving,setSaving]=useState(false);
@@ -3265,7 +3406,7 @@ function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
               <IOSInput placeholder="Codice Fiscale" value={newC.codiceFiscale||""} onChange={e=>setNewC(c=>({...c,codiceFiscale:e.target.value.toUpperCase()}))}/>
               <div style={{display:"flex",gap:8}}>
                 <Btn label="Annulla" variant="secondary" full onClick={()=>setShowNew(false)}/>
-                <Btn label="Aggiungi →" full disabled={!newC.nome||!newC.cognome} onClick={()=>onAddedCustomer({...newC,id:uid()},(id)=>{set("customerId",id);setStep(2);setShowNew(false);})}/>
+                <Btn label="Aggiungi →" full disabled={!newC.nome||!newC.cognome} onClick={()=>{const dup=findDuplicateCustomer(customers,newC);if(dup){setDupWarn(dup);return;}onAddedCustomer({...newC,id:uid()},(id)=>{set("customerId",id);setStep(2);setShowNew(false);});}}/>
               </div>
             </div>
           </IOSCard>
@@ -3282,6 +3423,8 @@ function OrderForm({order,customers,onSave,onClose,onAddedCustomer}) {
         ))}</IOSCard>}
         <div style={{height:20}}/><div style={{display:"flex",gap:10}}><Btn label="← Indietro" variant="secondary" full onClick={()=>setStep(0)}/><Btn label="Avanti →" disabled={!form.customerId} full onClick={()=>setStep(2)}/></div>
       </div>}
+
+      {dupWarn&&<DuplicateWarning existing={dupWarn} repairCount={repairs.filter(r=>r.customerId===dupWarn.id).length} orderCount={orders.filter(o=>o.customerId===dupWarn.id).length} onUse={()=>{set("customerId",dupWarn.id);setStep(2);setShowNew(false);setDupWarn(null);}} onCancel={()=>setDupWarn(null)}/>}
 
       {/* STEP 2 — Categoria */}
       {step===2&&<div>
@@ -3916,7 +4059,7 @@ function MainApp() {
     await Promise.all([loadRepairs(),loadDDTs()]);
     setRientroRapido(false);
     if(bulkMessages.length>0){
-      fetch("http://localhost:3001/wa/send-bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:bulkMessages})})
+      fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:bulkMessages})})
         .then(r=>r.json()).then(d=>console.log(`📲 WA bulk: ${d.queued} messaggi in coda`))
         .catch(e=>console.warn("WA bulk non disponibile:",e.message));
     }
@@ -3925,7 +4068,7 @@ function MainApp() {
   const handleSaveRepairer=async data=>{await withSync(()=>api.upsertRepairer(data));};
   const handleDeleteRepairer=async id=>{await withSync(()=>api.deleteRepairer(id));};
   const handleDeleteCustomer=async id=>{await withSync(()=>api.deleteCustomer(id));setViewCustomer(null);};
-  const handleBulkDeleteCustomer=async id=>{await api.deleteCustomer(id);};
+  const handleMergeCustomers=async(primaryId,duplicateIds)=>{await withSync(()=>api.mergeCustomers(primaryId,duplicateIds));};
 
   const handleConsegna=async(repair,customer)=>{
     const updated={...repair,status:"consegnato",dataConsegnata:today()};
@@ -3971,7 +4114,7 @@ function MainApp() {
           }).join("\n");
         }
         msg+=`\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch("http://localhost:3001/wa/send-bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
+        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
           .then(r=>r.json()).then(d=>console.log(`📲 WA conferma ordine inviato a ${c.nome} ${c.cognome}`))
           .catch(e=>console.warn("WA conferma ordine non disponibile:",e.message));
       }
@@ -3997,7 +4140,7 @@ function MainApp() {
       const priceInfo=totProd>0?`\nImporto: ${totProd.toFixed(2)} €${accProd>0?`\nAcconto versato: ${accProd.toFixed(2)} €`:""}${rimProd>0?`\nRimanenza da pagare: ${rimProd.toFixed(2)} €`:""}`:""
       if(stato==="arrivato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.${priceInfo}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch("http://localhost:3001/wa/send-bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
+        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
           .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
           .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
       } else if(stato==="consegnato"){
@@ -4142,17 +4285,17 @@ function MainApp() {
 
   const MODALS=(
     <>
-      {orderForm!==null&&<OrderForm order={orderForm.id?orderForm:null} customers={customers} onSave={handleSaveOrder} onClose={()=>setOrderForm(null)} onAddedCustomer={handleWizardAddCustomer}/>}
+      {orderForm!==null&&<OrderForm order={orderForm.id?orderForm:null} customers={customers} repairs={repairs} orders={orders} onSave={handleSaveOrder} onClose={()=>setOrderForm(null)} onAddedCustomer={handleWizardAddCustomer}/>}
       {viewOrder&&<OrderDetail order={viewOrder} customers={customers} onClose={()=>setViewOrder(null)} onEdit={()=>{setOrderForm(viewOrder);setViewOrder(null);}} onStatusChange={handleOrderStatus} onDelete={handleDeleteOrder} onWhatsApp={handleOrderWhatsApp} onPrint={()=>setOrderReceipt({order:viewOrder,customer:customers.find(c=>c.id===viewOrder.customerId)||null})} onProductStatus={handleOrderProductStatus}/>}
       {orderReceipt&&<OrderReceiptModal order={orderReceipt.order} customer={orderReceipt.customer} onClose={()=>setOrderReceipt(null)}/>}
       {importContatti&&<ImportContatti customers={customers} onImport={handleImportContatti} onClose={()=>setImportContatti(false)}/>}
-      {showDuplicates&&<DuplicatesModal customers={customers} repairs={repairs} onDelete={handleBulkDeleteCustomer} onClose={()=>{setShowDuplicates(false);loadCustomers();}}/>}
+      {showDuplicates&&<DuplicatesModal customers={customers} repairs={repairs} orders={orders} onMerge={handleMergeCustomers} onClose={()=>{setShowDuplicates(false);loadCustomers();loadRepairs();loadOrders();}}/>}
       {showConsegna&&<ConsegnaModal repairs={repairs} customers={customers} onConsegna={handleConsegna} onClose={()=>setShowConsegna(false)}/>}
       {rientroRapido&&<RientroRapido repairs={repairs} customers={customers} ddts={ddts} onSave={handleRientroRapido} onClose={()=>setRientroRapido(false)}/>}
       {waToast&&<WAToast repair={waToast.repair} customer={waToast.customer} customMsg={waToast.customMsg} label={waToast.label} onDismiss={()=>setWaToast(null)} isMD={isMD}/>}
       {liveQR&&<LiveQRScanner repairs={repairs} customers={customers} onUpdateStatus={handleStatus} onClose={()=>setLiveQR(false)}/>}
-      {wizard&&<RepairWizard customers={customers} onSave={handleSaveRepair} onClose={()=>setWizard(false)} onAddedCustomer={handleWizardAddCustomer}/>}
-      {customerForm!==null&&<CustomerForm customer={customerForm.id?customerForm:null} onSave={handleSaveCustomer} onClose={()=>setCustomerForm(null)}/>}
+      {wizard&&<RepairWizard customers={customers} repairs={repairs} orders={orders} onSave={handleSaveRepair} onClose={()=>setWizard(false)} onAddedCustomer={handleWizardAddCustomer}/>}
+      {customerForm!==null&&<CustomerForm customer={customerForm.id?customerForm:null} customers={customers} repairs={repairs} orders={orders} onSelectExisting={(c)=>{setCustomerForm(null);setViewCustomer(c);}} onSave={handleSaveCustomer} onClose={()=>setCustomerForm(null)}/>}
       {receiptModal&&<ReceiptModal repair={receiptModal.repair} customer={receiptModal.customer} onClose={()=>setReceiptModal(null)}/>}
       {viewRepair&&<RepairDetail repair={viewRepair} customer={customers.find(c=>c.id===viewRepair.customerId)} ddt={getDDT(viewRepair)} onClose={()=>setViewRepair(null)} onReceipt={openReceipt} onStatusChange={handleStatus} onTogglePrev={handleTogglePrev} onToggleRichPrev={handleToggleRichPrev} onDelete={()=>handleSoftDelete(viewRepair.id)} onDateChange={handleDateChange} onConsegna={handleConsegna} onPreventivoChange={handlePreventivoChange} onAccontoChange={handleAccontoChange} onToggleInterna={handleToggleInterna} onToggleGaranzia={handleToggleGaranzia} onSpesaChange={handleSpesaChange} onPrezzoFinaleChange={handlePrezzoFinaleChange} onMarcaRefChange={handleMarcaRefChange} onNotaPreventivoChange={handleNotaPreventivoChange}/>}
       {viewCustomer&&<CustomerDetail customer={viewCustomer} repairs={repairs.filter(r=>r.customerId===viewCustomer.id)} onClose={()=>setViewCustomer(null)} onEdit={c=>{setViewCustomer(null);setCustomerForm(c);}} onOpenRepair={r=>{setViewCustomer(null);setViewRepair(r);}} onReceipt={openReceipt} onDelete={handleDeleteCustomer}/>}
