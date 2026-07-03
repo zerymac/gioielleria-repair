@@ -14,6 +14,14 @@
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
+  "jest": {
+    "resetMocks": false,
+    "moduleNameMapper": {
+      "^whatsapp-web\\.js$": "<rootDir>/src/__audit__/mocks/wwebjs.js",
+      "^qrcode$": "<rootDir>/src/__audit__/mocks/qrcodeStub.js",
+      "^@supabase/supabase-js$": "<rootDir>/src/__audit__/mocks/supabaseJsStub.js"
+    }
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
