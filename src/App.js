@@ -4284,7 +4284,7 @@ function MainApp() {
   };
 
   const handleSaveRepair=async form=>{
-    const allItems=[...(form.items||[]),{categoria:form.categoria,tipoLavoro:form.tipoLavoro,descrizione:form.descrizione,materiali:form.materiali,problema:form.problema,mano:form.mano,dito:form.dito}];
+    const allItems=[...(form.items||[]),{categoria:form.categoria,tipoLavoro:form.tipoLavoro,descrizione:form.descrizione,materiali:form.materiali,marca:form.marca,referenza:form.referenza,problema:form.problema,mano:form.mano,dito:form.dito}];
     const c=customers.find(x=>x.id===form.customerId);
     const savedRepairs=[];
     setSyncing(true);
@@ -4293,7 +4293,7 @@ function MainApp() {
       const numero=await api.getNextRepairNum();
       const id=uid();
       const linkToken=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})();
-      const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,inGaranzia:form.inGaranzia||false,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
+      const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,marca:item.marca,referenza:item.referenza,notaPreventivo:form.notaPreventivo,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,inGaranzia:form.inGaranzia||false,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
       if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;}
       await api.upsertRepair(n);
       savedRepairs.push(n);

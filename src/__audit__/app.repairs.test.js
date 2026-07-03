@@ -32,16 +32,67 @@ test("A1/A3 — intake wizard completo: riparazione salvata con numero progressi
   expect(r.link_token).toBeTruthy();
 });
 
-test("BUG C2 — marca, referenza e nota preventivo raccolti dal wizard NON vengono salvati", async () => {
+test("FIX C2 — marca, referenza e nota preventivo raccolti dal wizard vengono salvati", async () => {
   render(<App />);
   await unlockAndLoad();
   await runRepairWizard({ marca: "Bulgari", referenza: "AB123", notaPreventivo: "Saldatura maglia" });
 
   const r = __fake.db.repairs[0];
-  // Comportamento REALE (bug documentato): i tre campi vengono scartati da handleSaveRepair.
-  expect(r.marca).toBeNull();
-  expect(r.referenza).toBeNull();
-  expect(r.nota_preventivo).toBeNull();
+  expect(r.marca).toBe("Bulgari");
+  expect(r.referenza).toBe("AB123");
+  expect(r.nota_preventivo).toBe("Saldatura maglia");
+});
+
+test("FIX C2 — multi-oggetto: ogni riparazione conserva la propria marca/referenza e la stessa nota preventivo", async () => {
+  render(<App />);
+  await unlockAndLoad();
+  click(screen.getByText("+ Nuova Riparazione"));
+  await screen.findByText("Chi prende la riparazione?");
+  click(screen.getByText("Adri")); click(screen.getByText("Avanti →"));
+  await screen.findByText("Chi \u00e8 il cliente?");
+  click(screen.getByText("Mario Rossi"));
+  await screen.findByText("Che tipo di oggetto?");
+  click(screen.getByText("Gioiello"));
+  await screen.findByText("Che lavoro serve?");
+  click(screen.getByText("Riparazione"));
+  await screen.findByText("Descrivi l'oggetto");
+  type(screen.getByPlaceholderText("Es. Anello in oro giallo con solitario brillante\u2026"), "Anello A");
+  type(screen.getByPlaceholderText("Es. Bulgari, Rolex\u2026"), "Bulgari");
+  type(screen.getByPlaceholderText("Es. AB1234"), "REF-A");
+  click(screen.getByText("Avanti →"));
+  await screen.findByText("Descrivi il problema");
+  type(screen.getByPlaceholderText("Es. Catena rotta a 3 cm dalla chiusura\u2026"), "problema A");
+  click(screen.getByText("Avanti →"));
+  await screen.findByText("Preventivo e date");
+  type(screen.getByPlaceholderText("Es. Sostituzione maglia, pulizia e lucidatura\u2026"), "Nota comune");
+  click(screen.getByText("Rivedi riepilogo →"));
+  await screen.findByText("Tutto pronto!");
+  click(screen.getByText("\u2795 Aggiungi altro oggetto"));
+  await screen.findByText("Che tipo di oggetto?");
+  click(screen.getByText("Orologio"));
+  await screen.findByText("Che lavoro serve?");
+  click(screen.getByText("Revisione"));
+  await screen.findByText("Descrivi l'oggetto");
+  type(screen.getByPlaceholderText("Es. Anello in oro giallo con solitario brillante\u2026"), "Orologio B");
+  type(screen.getByPlaceholderText("Es. Bulgari, Rolex\u2026"), "Rolex");
+  type(screen.getByPlaceholderText("Es. AB1234"), "REF-B");
+  click(screen.getByText("Avanti →"));
+  await screen.findByText("Descrivi il problema");
+  type(screen.getByPlaceholderText("Es. Catena rotta a 3 cm dalla chiusura\u2026"), "problema B");
+  click(screen.getByText("Avanti →"));
+  await screen.findByText("Preventivo e date");
+  click(screen.getByText("Rivedi riepilogo →"));
+  await screen.findByText("Tutto pronto!");
+  click(screen.getByText(/Crea riparazione e stampa/));
+  await screen.findByText(/^Etichette R/);
+
+  const byDesc = Object.fromEntries(__fake.db.repairs.map((r) => [r.descrizione, r]));
+  expect(byDesc["Anello A"].marca).toBe("Bulgari");
+  expect(byDesc["Anello A"].referenza).toBe("REF-A");
+  expect(byDesc["Orologio B"].marca).toBe("Rolex");
+  expect(byDesc["Orologio B"].referenza).toBe("REF-B");
+  expect(byDesc["Anello A"].nota_preventivo).toBe("Nota comune");
+  expect(byDesc["Orologio B"].nota_preventivo).toBe("Nota comune");
 });
 
 test("A3 — secondo intake incrementa il numero (nessun duplicato in sequenza)", async () => {
