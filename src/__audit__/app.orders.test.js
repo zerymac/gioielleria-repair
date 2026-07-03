@@ -70,7 +70,7 @@ test("C3 — prodotto → 'arrivato': stato ordine derivato + WA automatico fire
   const waCall = global.fetch.mock.calls.find(([url]) => String(url).includes("/wa/send-bulk"));
   expect(waCall).toBeTruthy();
   const body = JSON.parse(waCall[1].body);
-  expect(body.messages[0].telefono).toBe("3331234567");
+  expect(body.messages[0].telefono).toBe("+393331234567"); // E.164 (fix A4)
   expect(body.messages[0].messaggio).toMatch(/Anello X/);
   expect(body.messages[0].messaggio).toMatch(/80\.00/); // rimanenza 100-20
 

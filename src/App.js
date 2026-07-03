@@ -36,6 +36,7 @@ const ddtNum = (n) => `DDT${new Date().getFullYear()}-${String(n).padStart(4, "0
 const ordNum = (n) => `ORD${new Date().getFullYear()}-${String(n).padStart(4, "0")}`;
 const fullPhone = (c) => c?.telefonoPrefisso && c?.telefono ? (c.telefonoPrefisso + c.telefono).replace(/\D/g, "") : (c?.telefono || "").replace(/\D/g, "");
 const displayPhone = (c) => c?.telefono ? `${c.telefonoPrefisso || "+39"} ${c.telefono}` : "";
+const waPhone = (c) => c?.telefono ? `${c.telefonoPrefisso || "+39"}${c.telefono}` : "";
 
 function saveToContacts(c) {
   const lines = [
@@ -4162,7 +4163,7 @@ function MainApp() {
           const repConFin={...repUpd,prezzoFinale:fin??repUpd?.prezzoFinale};
           if(bulk){
             const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla sua riparazione n° ${repUpd.numero} è pronta per il ritiro.${fin?`\n\nImporto da saldare: ${fin} €`:""}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-            bulkMessages.push({telefono:custUpd.telefono,messaggio:msg});
+            bulkMessages.push({telefono:waPhone(custUpd),messaggio:msg});
           } else {
             setWaToast({repair:repConFin,customer:custUpd});
           }
@@ -4170,7 +4171,7 @@ function MainApp() {
         if(fi.nuovoStato==="reso_non_riparato"&&custUpd?.telefono){
           const causale=fi.causale?.trim()||"";
           const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla informiamo che la sua riparazione n° ${repUpd.numero} (${repUpd.descrizione}) ci è stata restituita senza essere riparata.${causale?`\n\nMotivo: ${causale}`:""}\n\nL'oggetto è disponibile per il ritiro.\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-          if(bulk) bulkMessages.push({telefono:custUpd.telefono,messaggio:msg});
+          if(bulk) bulkMessages.push({telefono:waPhone(custUpd),messaggio:msg});
           else setWaToast({repair:repUpd,customer:custUpd,customMsg:msg,label:"💬 Avvisa cliente"});
         }
       }
@@ -4245,7 +4246,7 @@ function MainApp() {
       const priceInfo=totProd>0?`\nImporto: ${totProd.toFixed(2)} €${accProd>0?`\nAcconto versato: ${accProd.toFixed(2)} €`:""}${rimProd>0?`\nRimanenza da pagare: ${rimProd.toFixed(2)} €`:""}`:""
       if(stato==="arrivato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.${priceInfo}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
+        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
           .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
           .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
       } else if(stato==="consegnato"){

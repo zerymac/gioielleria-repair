@@ -86,13 +86,17 @@ test("BUG M13 — disdetta su riparazione ESTERNA: lo stato passa a reso_non_rip
   expect(rE.wa_decline_sent_at).toBeTruthy();
 });
 
-test("BUG A4 — sendBulkWA: a un numero estero (+44…) viene anteposto il prefisso italiano 39", async () => {
+test("FIX A4 — sendBulkWA rispetta i prefissi internazionali; il nazionale nudo resta italiano", async () => {
   const res = await bot.sendBulkWA([
-    { telefono: "+44 7911 123456", messaggio: "hello" },
-    { telefono: "3331234567", messaggio: "ciao" },
+    { telefono: "+49 764 1234567", messaggio: "de" },   // E.164 estero (come lo invia l'app)
+    { telefono: "0044 7911 123456", messaggio: "uk" },  // formato 00 estero
+    { telefono: "+39 333 1234567", messaggio: "it+" },  // E.164 italiano
+    { telefono: "3331234567", messaggio: "it" },        // nazionale nudo → italiano
   ]);
-  expect(res).toEqual({ sent: 2, failed: 0 });
-  const calls = Client.instance.sendMessage.mock.calls.slice(-2);
-  expect(calls[0][0]).toBe("39447911123456@c.us"); // BUG: numero UK trattato come italiano
-  expect(calls[1][0]).toBe("393331234567@c.us");
+  expect(res).toEqual({ sent: 4, failed: 0 });
+  const calls = Client.instance.sendMessage.mock.calls.slice(-4);
+  expect(calls[0][0]).toBe("497641234567@c.us");   // Germania, non 39…
+  expect(calls[1][0]).toBe("447911123456@c.us");   // UK via 00, non 39…
+  expect(calls[2][0]).toBe("393331234567@c.us");   // italiano E.164
+  expect(calls[3][0]).toBe("393331234567@c.us");   // italiano nazionale
 });
