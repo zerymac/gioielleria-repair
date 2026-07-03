@@ -80,18 +80,47 @@ test("C3 — prodotto → 'arrivato': stato ordine derivato + WA automatico fire
   expect(screen.queryByText(/non inviato|errore/i)).toBeNull();
 });
 
-test("BUG A9 — 'Consegna al cliente' dalla card marca consegnati anche i prodotti NON arrivati", async () => {
+test("FIX A9 — 'Consegna al cliente' consegna solo gli arrivati; l'ordine resta aperto per gli altri", async () => {
   __fake.seed("orders", [{
     id: "o2", numero: "ORD2026-0002", customer_id: "c1", stato: "arrivato", data_ordine: "2026-06-20",
     prodotti: [
-      { id: "p1", descrizione: "Anello arrivato", stato: "arrivato", quantita: 1 },
+      { id: "p1", descrizione: "Anello arrivato", stato: "arrivato", quantita: 1, prezzoVendita: 100, acconto: 20 },
       { id: "p2", descrizione: "Bracciale ancora ordinato", stato: "ordinato", quantita: 1 },
     ],
   }]);
   await gotoOrders();
   click(screen.getByText("Consegna al cliente"));
 
+  await waitFor(() => expect(__fake.db.orders[0].prodotti.find((p) => p.id === "p1").stato).toBe("consegnato"));
+  // p2 (mai arrivato) NON viene consegnato
+  expect(__fake.db.orders[0].prodotti.find((p) => p.id === "p2").stato).toBe("ordinato");
+  // stato ordine derivato dai prodotti → resta aperto ("ordinato")
+  expect(__fake.db.orders[0].stato).toBe("ordinato");
+
+  // il WhatsApp di conferma riguarda solo l'articolo effettivamente consegnato
+  const toast = await screen.findByText(/Conferma consegna/);
+  fireEvent.click(toast);
+  const waUrl = window.open.mock.calls.map(([u]) => decodeURIComponent(String(u))).find((u) => u.includes("wa.me"));
+  expect(waUrl).toMatch(/Anello arrivato/);
+  expect(waUrl).not.toMatch(/Bracciale/);
+  expect(waUrl).toMatch(/parziale/);
+});
+
+test("FIX A9 — ordine con tutti gli articoli arrivati: consegna completa, stato consegnato, messaggio non parziale", async () => {
+  __fake.seed("orders", [{
+    id: "o3", numero: "ORD2026-0003", customer_id: "c1", stato: "arrivato", data_ordine: "2026-06-20",
+    prodotti: [
+      { id: "p1", descrizione: "Anello", stato: "arrivato", quantita: 1 },
+      { id: "p2", descrizione: "Bracciale", stato: "arrivato", quantita: 1 },
+    ],
+  }]);
+  await gotoOrders();
+  click(screen.getByText("Consegna al cliente"));
+
   await waitFor(() => expect(__fake.db.orders[0].stato).toBe("consegnato"));
-  // Comportamento REALE (bug): p2 passa da "ordinato" a "consegnato" senza mai essere arrivato
-  expect(__fake.db.orders[0].prodotti.map((p) => p.stato)).toEqual(["consegnato", "consegnato"]);
+  expect(__fake.db.orders[0].prodotti.every((p) => p.stato === "consegnato")).toBe(true);
+  const toast = await screen.findByText(/Conferma consegna/);
+  fireEvent.click(toast);
+  const waUrl = window.open.mock.calls.map(([u]) => decodeURIComponent(String(u))).find((u) => u.includes("wa.me"));
+  expect(waUrl).not.toMatch(/parziale/);
 });

@@ -4262,18 +4262,25 @@ function MainApp() {
   };
 
   const handleConsegnaOrder=async order=>{
-    const prodotti=order.prodotti.map(p=>({...p,stato:"consegnato"}));
-    const updated={...order,prodotti,stato:"consegnato"};
+    const consegnatiOra=order.prodotti.filter(p=>p.stato==="arrivato");
+    if(consegnatiOra.length===0)return;
+    const prodotti=order.prodotti.map(p=>p.stato==="arrivato"?{...p,stato:"consegnato"}:p);
+    const stato=prodotti.every(p=>p.stato==="consegnato")?"consegnato":
+      prodotti.some(p=>p.stato==="arrivato")?"arrivato":
+      prodotti.some(p=>p.stato==="ordinato")?"ordinato":"da_ordinare";
+    const updated={...order,prodotti,stato};
     await withSync(()=>api.upsertOrder(updated));
     setOrders(prev=>prev.map(o=>o.id===order.id?updated:o));
     if(viewOrder?.id===order.id)setViewOrder(updated);
     const c=customers.find(x=>x.id===order.customerId);
     if(c?.telefono){
-      const totOrd=prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
-      const totAcc=prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
+      const totOrd=consegnatiOra.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
+      const totAcc=consegnatiOra.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
       const rimOrd=totOrd-totAcc;
-      const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
-      const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna dell'ordine n° ${order.numero}.${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
+      const totLines=totOrd>0?`\nImporto: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
+      const artLines=consegnatiOra.map(p=>`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`).join("\n");
+      const parziale=stato!=="consegnato";
+      const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna ${parziale?"parziale ":""}dell'ordine n° ${order.numero}:\n${artLines}${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
       setWaToast({repair:updated,customer:c,customMsg:msg,label:"📄 Conferma consegna"});
     }
   };
