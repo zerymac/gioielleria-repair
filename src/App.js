@@ -106,6 +106,13 @@ const WORK_TYPES = [
   { id:"Personaliz.",  icon:"🎨", desc:"Personalizzazione e incisione" },
 ];
 
+const OPERATORS = [
+  { id:"Adri",  label:"Adri",  color:"#7C3AED", bg:"#F3EFFE" },
+  { id:"Massi", label:"Massi", color:"#2563EB", bg:"#EFF6FF" },
+  { id:"Jenny", label:"Jenny", color:"#DB2777", bg:"#FDF2F8" },
+  { id:"Manu",  label:"Manu",  color:"#059669", bg:"#ECFDF5" },
+];
+
 const C = {
   gold:"#B8860B", surface:"#F2F2F7", white:"#FFFFFF",
   label:"#1C1C1E", secondary:"#8E8E93", separator:"#C6C6C8",
@@ -926,8 +933,9 @@ function RepairCard({repair:r,customer:c,ddt,onPress,onReceipt}) {
           </div>
         )}
         <div style={{fontSize:14,color:C.label,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4}}>{r.descrizione}</div>
-        <div style={{fontSize:12,color:C.secondary,display:"flex",gap:10,flexWrap:"wrap"}}>
+        <div style={{fontSize:12,color:C.secondary,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
           {c&&<span>👤 {c.nome} {c.cognome}</span>}
+          {r.operatore&&(()=>{const op=OPERATORS.find(o=>o.id===r.operatore);return <span style={{background:op?.bg||"#F2F2F7",color:op?.color||C.secondary,padding:"1px 7px",borderRadius:8,fontWeight:600,fontSize:11}}>👷 {r.operatore}</span>;})()}
           {r.dataConsegna&&<span>📅 {fmtDate(r.dataConsegna)}</span>}
           {r.prezzoFinale?<span>💰 {r.prezzoFinale} €</span>:r.preventivo?<span>💰 {r.preventivo} €</span>:null}
         </div>
@@ -1019,13 +1027,6 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
   };
 
   const stepTitles=["","👤 Cliente","💎 Oggetto","🔧 Tipo lavoro","📝 Descrizione","🔍 Problema","💰 Preventivo","✅ Riepilogo"];
-
-  const OPERATORS=[
-    {id:"Adri",  label:"Adri",  color:"#7C3AED", bg:"#F3EFFE"},
-    {id:"Massi", label:"Massi", color:"#2563EB", bg:"#EFF6FF"},
-    {id:"Jenny", label:"Jenny", color:"#DB2777", bg:"#FDF2F8"},
-    {id:"Manu",  label:"Manu",  color:"#059669", bg:"#ECFDF5"},
-  ];
 
   return (
     <FullScreen onClose={onClose} title={step===0?"👷 Operatore":stepTitles[step]} step={step||undefined} totalSteps={TOTAL}>
@@ -1931,8 +1932,18 @@ function SettingsPage({customers,repairs,ddts,repairers,onRestore,onSaveRepairer
 /* ── Receipt Modal ── */
 function OrderReceiptModal({order,customer:c,onClose}) {
   const totAccMsg=order.prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
-  const prodLines=order.prodotti.map(p=>{let line=`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}`;if(p.dataConsegnaPrevista)line+=` (cons. ${fmtDate(p.dataConsegnaPrevista)})`;if(p.acconto)line+=` — acc. ${p.acconto} €`;return line;}).join("\n");
-  const msg=`Gentile ${c?.nome} ${c?.cognome},\nConferma ordine n° ${order.numero}\n${order.prodotti.length>0?prodLines+"\n":""}\n${totAccMsg>0?"Acconto totale versato: "+totAccMsg.toFixed(2)+" €\n":""}\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+  const prodLines=order.prodotti.map(p=>{
+    const tot=(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1);
+    const acc=parseFloat(p.acconto)||0;
+    const rim=tot-acc;
+    let line=`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`;
+    if(tot>0)line+=`\n  Prezzo: ${tot.toFixed(2)} €`;
+    if(acc>0)line+=`\n  Acconto: ${acc.toFixed(2)} €`;
+    if(rim>0)line+=`\n  Da saldare: ${rim.toFixed(2)} €`;
+    if(p.dataConsegnaPrevista)line+=`\n  Consegna: ${fmtDate(p.dataConsegnaPrevista)}`;
+    return line;
+  }).join("\n");
+  const msg=`Gentile ${c?.nome} ${c?.cognome},\nconfermiamo la ricezione del suo ordine n° ${order.numero}.${order.prodotti.length>0?"\n\n"+prodLines:""}\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
   const doPrint=()=>{try{smartPrint(orderLabelHTML(order,c));}catch(e){console.error(e);}};
   const doWA=()=>{const p=c?fullPhone(c):"";if(p)window.open("https://wa.me/"+p+"?text="+encodeURIComponent(msg),"_blank");};
   const doEmail=()=>{if(c?.email)window.open("mailto:"+c.email+"?subject="+encodeURIComponent("Ordine "+order.numero)+"&body="+encodeURIComponent(msg));};
@@ -2003,7 +2014,7 @@ function ReceiptModal({repair:r,customer:c,onClose}) {
 }
 
 /* ── Repair Detail ── */
-function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,onTogglePrev,onToggleRichPrev,onToggleInterna,onToggleGaranzia,onDelete,onDateChange,onConsegna,onPreventivoChange,onAccontoChange,onSpesaChange,onPrezzoFinaleChange,onMarcaRefChange,onNotaPreventivoChange}) {
+function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,onTogglePrev,onToggleRichPrev,onToggleInterna,onToggleGaranzia,onDelete,onDateChange,onConsegna,onPreventivoChange,onAccontoChange,onSpesaChange,onPrezzoFinaleChange,onMarcaRefChange,onNotaPreventivoChange,onFieldChange}) {
   const [confirmDelete,setConfirmDelete]=useState(false);
   const [editPrev,setEditPrev]=useState(false);
   const [prevInput,setPrevInput]=useState("");
@@ -2022,6 +2033,24 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   const [notaInput,setNotaInput]=useState("");
   const startEditNota=()=>{setNotaInput(r.notaPreventivo||"");setEditNota(true);};
   const saveNota=()=>{onNotaPreventivoChange&&onNotaPreventivoChange(r.id,notaInput.trim()||null);setEditNota(false);};
+  const [editDesc,setEditDesc]=useState(false);
+  const [descInput,setDescInput]=useState("");
+  const startEditDesc=()=>{setDescInput(r.descrizione||"");setEditDesc(true);};
+  const saveDesc=()=>{const v=descInput.trim();if(!v){setEditDesc(false);return;}onFieldChange&&onFieldChange(r.id,{descrizione:v});setEditDesc(false);};
+  const [editMat,setEditMat]=useState(false);
+  const [matInput,setMatInput]=useState("");
+  const startEditMat=()=>{setMatInput(r.materiali||"");setEditMat(true);};
+  const saveMat=()=>{onFieldChange&&onFieldChange(r.id,{materiali:matInput.trim()||null});setEditMat(false);};
+  const [editProb,setEditProb]=useState(false);
+  const [probInput,setProbInput]=useState("");
+  const startEditProb=()=>{setProbInput(r.problema||"");setEditProb(true);};
+  const saveProb=()=>{onFieldChange&&onFieldChange(r.id,{problema:probInput.trim()||null});setEditProb(false);};
+  const [editNoteInt,setEditNoteInt]=useState(false);
+  const [noteIntInput,setNoteIntInput]=useState("");
+  const startEditNoteInt=()=>{setNoteIntInput(r.note||"");setEditNoteInt(true);};
+  const saveNoteInt=()=>{onFieldChange&&onFieldChange(r.id,{note:noteIntInput.trim()||null});setEditNoteInt(false);};
+  const [editOp,setEditOp]=useState(false);
+  const setOp=(op)=>{onFieldChange&&onFieldChange(r.id,{operatore:op||null});setEditOp(false);};
   const catIcon=CATS.find(x=>x.id===r.categoria)?.icon||"💍";
   const startEditPrev=()=>{setPrevInput(r.preventivo!=null?String(r.preventivo):"");setEditPrev(true);};
   const savePrev=()=>{onPreventivoChange(r.id,prevInput===""?null:parseFloat(prevInput)||null);setEditPrev(false);};
@@ -2034,16 +2063,27 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   return (
     <Sheet onClose={onClose} title={r.numero}>
       {r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:14,marginBottom:12}}/>}
-      <div style={{display:"flex",alignItems:"center",gap:14,background:C.white,borderRadius:20,padding:16,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:14,background:C.white,borderRadius:20,padding:16,marginBottom:12}}>
         <div style={{width:54,height:54,borderRadius:27,background:STATUSES[r.status]?.bg||"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0}}>{catIcon}</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:4}}><IOSBadge status={r.status}/>{ddt&&<span style={{fontSize:11,background:"#F5F3FF",color:C.purple,padding:"2px 8px",borderRadius:10,fontWeight:600}}>{ddt.numero}</span>}</div>
-          <div style={{fontSize:15,fontWeight:700,color:C.label}}>{r.descrizione}</div>
+          {editDesc
+            ?<div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
+                <textarea autoFocus value={descInput} onChange={e=>setDescInput(e.target.value)} rows={2}
+                  style={{width:"100%",fontSize:15,fontWeight:600,border:"1px solid #C9A227",borderRadius:8,padding:"6px 8px",outline:"none",fontFamily:"-apple-system,sans-serif",resize:"vertical",boxSizing:"border-box"}}/>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={saveDesc} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 12px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓ Salva</button>
+                  <button onClick={()=>setEditDesc(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 12px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Annulla</button>
+                </div>
+              </div>
+            :<div style={{fontSize:15,fontWeight:700,color:C.label}}>{r.descrizione}</div>
+          }
           <div style={{fontSize:13,color:C.secondary,marginTop:2}}>{r.categoria}{r.tipoLavoro?" · "+r.tipoLavoro:""}{r.mano?" · Mano "+r.mano+" "+r.dito:""}</div>
         </div>
+        {!editDesc&&<button onClick={startEditDesc} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>}
       </div>
       <IOSCard style={{marginBottom:12}}>
-        {c&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:(!r.materiali&&!r.problema)?"none":"1px solid #F2F2F7"}}>
+        {c&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
           <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>👤</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:15,fontWeight:600,color:C.label}}>{c.nome} {c.cognome}</div>
@@ -2051,7 +2091,24 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
           </div>
           <WABtn customer={c} size={32}/>
         </div>}
-        {r.materiali&&<IOSRow icon="🪙" label="Materiali" value={r.materiali}/>}
+        {editMat
+          ?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🪙</span>
+              <input autoFocus placeholder="Es. Oro 18k, argento 925…" value={matInput} onChange={e=>setMatInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")saveMat();}}
+                style={{flex:1,fontSize:14,border:"1px solid #C9A227",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif"}}/>
+              <button onClick={saveMat} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 10px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✓</button>
+              <button onClick={()=>setEditMat(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✕</button>
+            </div>
+          :<div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🪙</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>Materiali</div>
+                <div style={{fontSize:15,color:r.materiali?C.label:C.secondary,fontWeight:r.materiali?600:400}}>{r.materiali||"Non specificati"}</div>
+              </div>
+              <button onClick={startEditMat} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
         {editMarcaRef
           ?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
               <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🏷️</span>
@@ -2072,7 +2129,48 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
               <button onClick={startEditMarcaRef} style={{background:"#F5F3FF",border:"none",borderRadius:8,padding:"5px 9px",color:C.purple,fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
             </div>
         }
-        {r.problema&&<IOSRow icon="🔍" label="Problema" sub={r.problema} last/>}
+        {editProb
+          ?<div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0,paddingTop:4}}>🔍</span>
+              <textarea autoFocus placeholder="Es. Catena rotta a 3 cm dalla chiusura…" value={probInput} onChange={e=>setProbInput(e.target.value)} rows={3}
+                style={{flex:1,fontSize:14,border:"1px solid #C9A227",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif",resize:"vertical"}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+                <button onClick={saveProb} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 10px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓</button>
+                <button onClick={()=>setEditProb(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕</button>
+              </div>
+            </div>
+          :<div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🔍</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>Problema</div>
+                <div style={{fontSize:15,color:r.problema?C.label:C.secondary,fontWeight:r.problema?400:400,whiteSpace:"pre-wrap"}}>{r.problema||"Non specificato"}</div>
+              </div>
+              <button onClick={startEditProb} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
+        {editOp
+          ?<div style={{padding:"10px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>👷</span>
+                <div style={{flex:1,fontSize:13,color:C.secondary,fontWeight:500}}>Operatore</div>
+                <button onClick={()=>setEditOp(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕</button>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {OPERATORS.map(op=>(
+                  <button key={op.id} onClick={()=>setOp(op.id)} style={{background:r.operatore===op.id?op.color:op.bg,border:"none",borderRadius:14,padding:"8px 14px",color:r.operatore===op.id?"white":op.color,fontSize:13,fontWeight:700,cursor:"pointer"}}>{op.label}</button>
+                ))}
+                {r.operatore&&<button onClick={()=>setOp(null)} style={{background:"#F2F2F7",border:"none",borderRadius:14,padding:"8px 14px",color:C.secondary,fontSize:13,fontWeight:600,cursor:"pointer"}}>Nessuno</button>}
+              </div>
+            </div>
+          :<div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 16px"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>👷</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>Operatore</div>
+                <div style={{fontSize:15,color:r.operatore?C.label:C.secondary,fontWeight:r.operatore?600:400}}>{r.operatore||"Non assegnato"}</div>
+              </div>
+              <button onClick={()=>setEditOp(true)} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
       </IOSCard>
       <IOSCard style={{marginBottom:12}}>
         <IOSRow icon="📅" label="Ricevuta" value={fmtDate(r.dataRicevuta)}/>
@@ -2182,6 +2280,27 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
         {r.dataRientrata&&<IOSRow icon="📥" label="Rientrata dal fornitore" value={fmtDate(r.dataRientrata)}/>}
         {r.dataConsegnata&&<IOSRow icon="🤝" label="Consegnata al cliente" value={fmtDate(r.dataConsegnata)}/>}
         <IOSRow icon="🔢" label="Numero" value={r.numero} last/>
+      </IOSCard>
+      <IOSCard style={{marginBottom:12}}>
+        {editNoteInt
+          ?<div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 16px"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0,paddingTop:4}}>📋</span>
+              <textarea autoFocus placeholder="Annotazioni per uso interno…" value={noteIntInput} onChange={e=>setNoteIntInput(e.target.value)} rows={3}
+                style={{flex:1,fontSize:14,border:"1px solid #C9A227",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif",resize:"vertical"}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+                <button onClick={saveNoteInt} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 10px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓</button>
+                <button onClick={()=>setEditNoteInt(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕</button>
+              </div>
+            </div>
+          :<div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"11px 16px"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>📋</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>Note interne</div>
+                <div style={{fontSize:15,color:r.note?C.label:C.secondary,fontWeight:400,whiteSpace:"pre-wrap"}}>{r.note||"Nessuna nota"}</div>
+              </div>
+              <button onClick={startEditNoteInt} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
       </IOSCard>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         <Toggle label="✅ Preventivo accettato dal cliente" value={r.preventivoAccettato||false} onChange={()=>onTogglePrev(r)}/>
@@ -3303,13 +3422,6 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
   const selC=customers.find(c=>c.id===form.customerId);
   const filtered=customers.filter(c=>matchCustomer(c,search));
 
-  const OPERATORS=[
-    {id:"Adri",  label:"Adri",  color:"#7C3AED", bg:"#F3EFFE"},
-    {id:"Massi", label:"Massi", color:"#2563EB", bg:"#EFF6FF"},
-    {id:"Jenny", label:"Jenny", color:"#DB2777", bg:"#FDF2F8"},
-    {id:"Manu",  label:"Manu",  color:"#059669", bg:"#ECFDF5"},
-  ];
-
   const handleFoto=async(e)=>{
     const file=e.target.files?.[0];if(!file)return;
     const blob=await compressImage(file,800,0.7);
@@ -3577,7 +3689,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
           ➕ Aggiungi altro articolo
         </button>
 
-        <Btn label={saving?"Salvataggio…":isEdit?"✓ Salva modifiche":"✓ Crea ordine e stampa"} full disabled={saving||!form.customerId||(form.prodotti.length===0&&!form.descrizione?.trim())} onClick={handleSave}/>
+        <Btn label={saving?"Salvataggio…":isEdit?"✓ Salva modifiche":"✓ Crea ordine"} full disabled={saving||!form.customerId||(form.prodotti.length===0&&!form.descrizione?.trim())} onClick={handleSave}/>
         <div style={{height:10}}/>
         <Btn label="← Modifica" variant="secondary" full onClick={()=>setStep(5)}/>
       </div>}
@@ -3586,122 +3698,130 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
   );
 }
 
-function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onWhatsApp,onPrint,onProductStatus}) {
+function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onPrint,onProductStatus,onConsegna}) {
   const c=customers.find(x=>x.id===order.customerId);
   const [confirmDel,setConfirmDel]=useState(false);
   const [expandedProd,setExpandedProd]=useState(null);
   const s=ORDER_STATUSES[order.stato]||ORDER_STATUSES.ordinato;
   const totVendita=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
   const totAcquisto=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoAcquisto)||0)*(parseInt(p.quantita)||1),0);
+  const totAcconto=order.prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
   const margine=totVendita-totAcquisto;
-  const statusFlow=["da_ordinare","ordinato","arrivato","consegnato"];
-  const nextStatus=statusFlow[statusFlow.indexOf(order.stato)+1];
-  const nextLabel=nextStatus?ORDER_STATUSES[nextStatus]?.label:null;
+  const firstProd=order.prodotti[0];
+  const earliestDate=order.prodotti.map(p=>p.dataConsegnaPrevista).filter(Boolean).sort()[0]||null;
+  const op=OPERATORS.find(o=>o.id===order.operatore);
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:100,display:"flex",alignItems:"flex-end"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:C.surface,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"92vh",overflowY:"auto",paddingBottom:40}}>
-
-        {/* Header */}
-        <div style={{position:"sticky",top:0,background:"rgba(242,242,247,.96)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(0,0,0,.08)",padding:"14px 16px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:10}}>
-          <div>
-            <div style={{fontSize:17,fontWeight:800,color:C.label}}>{order.numero}</div>
+    <Sheet onClose={onClose} title={order.numero}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:14,background:C.white,borderRadius:20,padding:16,marginBottom:12}}>
+        <div style={{width:54,height:54,borderRadius:27,background:s.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0}}>📦</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:4}}>
             <OrderStatusBadge stato={order.stato}/>
+            {op&&<span style={{background:op.bg,color:op.color,padding:"2px 8px",borderRadius:10,fontSize:11,fontWeight:700}}>👷 {order.operatore}</span>}
           </div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={onPrint} style={{background:"#FDF6DC",border:"none",borderRadius:10,padding:"8px 12px",color:"#B8860B",fontSize:14,fontWeight:700,cursor:"pointer"}}>🖨️</button>
-            <button onClick={onEdit} style={{background:"#FDF6DC",border:"none",borderRadius:10,padding:"8px 12px",color:"#B8860B",fontSize:14,fontWeight:700,cursor:"pointer"}}>✏️</button>
-            <button onClick={onClose} style={{background:"none",border:"none",fontSize:24,cursor:"pointer",color:C.secondary,padding:"0 4px"}}>×</button>
-          </div>
+          <div style={{fontSize:15,fontWeight:700,color:C.label}}>{order.prodotti.length} articolo{order.prodotti.length!==1?"i":""}</div>
+          {firstProd&&<div style={{fontSize:13,color:C.secondary,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstProd.descrizione}{order.prodotti.length>1?` +${order.prodotti.length-1} altri`:""}</div>}
         </div>
+        <button onClick={onEdit} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+      </div>
 
-        <div style={{padding:"16px 16px 0"}}>
+      <IOSCard style={{marginBottom:12}}>
+        {c&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
+          <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>👤</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:600,color:C.label}}>{c.nome} {c.cognome}</div>
+            {(displayPhone(c)||c.email)&&<div style={{fontSize:13,color:C.secondary,marginTop:2}}>{displayPhone(c)||c.email}</div>}
+          </div>
+          <WABtn customer={c} size={32}/>
+        </div>}
+        {order.dataOrdine&&<IOSRow icon="📅" label="Data ordine" value={fmtDate(order.dataOrdine)}/>}
+        {earliestDate&&<IOSRow icon="🚚" label="Consegna prevista" value={fmtDate(earliestDate)}/>}
+        <IOSRow icon="🔢" label="Numero" value={order.numero} last/>
+      </IOSCard>
 
-          {/* Cliente + info ordine */}
-          <IOSCard style={{marginBottom:12}}>
-            {c&&<IOSRow icon="👤" label="Cliente" value={`${c.nome} ${c.cognome}`} sub={displayPhone(c)||undefined}/>}
-            {order.operatore&&<IOSRow icon="👷" label="Operatore" value={order.operatore}/>}
-            {order.dataOrdine&&<IOSRow icon="📅" label="Data ordine" value={fmtDate(order.dataOrdine)}/>}
-            <IOSRow icon="📋" label="Stato" value={s.label} last/>
-          </IOSCard>
-
-          {/* Articoli */}
-          {order.prodotti.length>0&&(
-            <IOSCard style={{marginBottom:12}}>
-              <div style={{padding:"10px 16px 8px",fontSize:12,fontWeight:700,color:C.secondary}}>ARTICOLI ({order.prodotti.length})</div>
-              {order.prodotti.map((p,i)=>{
-                const ps=ORDER_STATUSES[p.stato]||ORDER_STATUSES.da_ordinare;
-                const isExp=expandedProd===p.id;
-                const isOverdue=p.dataConsegnaPrevista&&p.dataConsegnaPrevista<today()&&p.stato!=="consegnato";
-                return (
-                  <div key={p.id||i} style={{padding:"12px 16px",borderTop:"1px solid #F2F2F7"}}>
-                    {p.fotoUrl&&<img src={p.fotoUrl} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:10,marginBottom:10}}/>}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:15,fontWeight:700,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
-                        {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:13,color:C.secondary,marginTop:1}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
-                        {(p.marca||p.referenza)&&<div style={{fontSize:12,color:C.secondary}}>{[p.marca,p.referenza].filter(Boolean).join(" · ")}</div>}
-                        {p.note&&<div style={{fontSize:12,color:C.secondary,fontStyle:"italic",marginTop:2}}>{p.note}</div>}
-                        <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
-                          {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
-                          {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
-                          {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":"#3B82F6",fontWeight:600}}>{isOverdue?"⚠️ ":"📅 "}{fmtDate(p.dataConsegnaPrevista)}</span>}
-                        </div>
-                      </div>
-                      <button onClick={()=>setExpandedProd(isExp?null:p.id)} style={{background:ps.bg,border:`1.5px solid ${ps.color}`,borderRadius:20,padding:"4px 10px",color:ps.color,fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>{ps.label} ▾</button>
+      {order.prodotti.length>0&&(
+        <IOSCard style={{marginBottom:12}}>
+          <div style={{padding:"10px 16px 6px",fontSize:12,fontWeight:700,color:C.secondary}}>ARTICOLI ({order.prodotti.length})</div>
+          {order.prodotti.map((p,i)=>{
+            const ps=ORDER_STATUSES[p.stato]||ORDER_STATUSES.da_ordinare;
+            const isExp=expandedProd===p.id;
+            const isOverdue=p.dataConsegnaPrevista&&p.dataConsegnaPrevista<today()&&p.stato!=="consegnato";
+            return (
+              <div key={p.id||i} style={{padding:"12px 16px",borderTop:"1px solid #F2F2F7"}}>
+                {p.fotoUrl&&<img src={p.fotoUrl} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:10,marginBottom:10}}/>}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:15,fontWeight:700,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
+                    {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:13,color:C.secondary,marginTop:1}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
+                    {(p.marca||p.referenza)&&<div style={{fontSize:12,color:C.secondary}}>{[p.marca,p.referenza].filter(Boolean).join(" · ")}</div>}
+                    {p.note&&<div style={{fontSize:12,color:C.secondary,fontStyle:"italic",marginTop:2}}>{p.note}</div>}
+                    <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
+                      {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
+                      {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
+                      {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":"#3B82F6",fontWeight:600}}>{isOverdue?"⚠️ ":"📅 "}{fmtDate(p.dataConsegnaPrevista)}</span>}
                     </div>
-                    {isExp&&(
-                      <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
-                        {Object.entries(ORDER_STATUSES).map(([k,v])=>(
-                          <button key={k} onClick={()=>{onProductStatus(order.id,p.id,k);setExpandedProd(null);}} style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${p.stato===k?v.color:"transparent"}`,background:p.stato===k?v.bg:"#E5E5EA",color:p.stato===k?v.color:C.label,fontSize:12,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-              {(totVendita>0||totAcquisto>0)&&(
-                <div style={{padding:"10px 16px",borderTop:"1px solid #F2F2F7"}}>
-                  {totVendita>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:C.label}}><span>Totale vendita</span><span>{totVendita.toFixed(2)} €</span></div>}
-                  {totAcquisto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.secondary,marginTop:2}}><span>Totale acquisto</span><span>{totAcquisto.toFixed(2)} €</span></div>}
-                  {totAcquisto>0&&totVendita>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:margine>=0?"#059669":"#FF3B30",marginTop:2}}><span>Margine</span><span>{margine.toFixed(2)} €</span></div>}
+                  <button onClick={()=>setExpandedProd(isExp?null:p.id)} style={{background:ps.bg,border:`1.5px solid ${ps.color}`,borderRadius:20,padding:"4px 10px",color:ps.color,fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>{ps.label} ▾</button>
                 </div>
-              )}
-            </IOSCard>
-          )}
-
-          {/* Note */}
-          {order.note&&(
-            <IOSCard style={{marginBottom:12}}>
-              <IOSRow icon="📋" label="Note" sub={order.note} last/>
-            </IOSCard>
-          )}
-
-          {/* WA cliente */}
-          {c?.telefono&&(
-            <IOSCard style={{marginBottom:12}}>
-              <div style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:12}}>
-                <div style={{flex:1,fontSize:14,fontWeight:600,color:C.label}}>Contatta cliente</div>
-                <WABtn customer={c} size={36}/>
+                {isExp&&(
+                  <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
+                    {Object.entries(ORDER_STATUSES).map(([k,v])=>(
+                      <button key={k} onClick={()=>{onProductStatus(order.id,p.id,k);setExpandedProd(null);}} style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${p.stato===k?v.color:"transparent"}`,background:p.stato===k?v.bg:"#E5E5EA",color:p.stato===k?v.color:C.label,fontSize:12,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </IOSCard>
-          )}
-
-          {/* Elimina */}
-          {!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{width:"100%",background:"none",border:`1px solid ${C.separator}`,borderRadius:14,padding:"12px",color:"#FF3B30",fontSize:14,fontWeight:600,cursor:"pointer"}}>Elimina ordine</button>}
-          {confirmDel&&(
-            <div style={{background:"#FFF5F5",borderRadius:14,padding:14,textAlign:"center"}}>
-              <div style={{fontSize:15,fontWeight:700,color:"#FF3B30",marginBottom:12}}>Eliminare l'ordine?</div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>{onDelete(order.id);onClose();}} style={{flex:1,background:"#FF3B30",border:"none",borderRadius:10,padding:"11px",color:"white",fontWeight:700,fontSize:15,cursor:"pointer"}}>Elimina</button>
-                <button onClick={()=>setConfirmDel(false)} style={{flex:1,background:"#E5E5EA",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:15,cursor:"pointer"}}>Annulla</button>
-              </div>
+            );
+          })}
+          {(totVendita>0||totAcquisto>0||totAcconto>0)&&(
+            <div style={{padding:"10px 16px",borderTop:"1px solid #F2F2F7"}}>
+              {totVendita>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:C.label}}><span>Totale vendita</span><span>{totVendita.toFixed(2)} €</span></div>}
+              {totAcconto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#059669",marginTop:2,fontWeight:600}}><span>Acconto totale</span><span>{totAcconto.toFixed(2)} €</span></div>}
+              {totAcquisto>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.secondary,marginTop:2}}><span>Totale acquisto</span><span>{totAcquisto.toFixed(2)} €</span></div>}
+              {totAcquisto>0&&totVendita>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:margine>=0?"#059669":"#FF3B30",marginTop:2}}><span>Margine</span><span>{margine.toFixed(2)} €</span></div>}
             </div>
           )}
+        </IOSCard>
+      )}
 
+      {order.note&&(
+        <IOSCard style={{marginBottom:12}}>
+          <IOSRow icon="📋" label="Note" sub={order.note} last/>
+        </IOSCard>
+      )}
+
+      <div style={{background:C.white,borderRadius:16,padding:14,marginBottom:12}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.secondary,marginBottom:10}}>CAMBIA STATO ORDINE</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {Object.entries(ORDER_STATUSES).map(([k,v])=>(
+            <button key={k} onClick={()=>onStatusChange(order.id,k)} style={{padding:"8px 14px",borderRadius:20,border:"none",background:order.stato===k?v.bg:"#F2F2F7",color:order.stato===k?v.color:C.secondary,fontSize:13,fontWeight:order.stato===k?700:500,cursor:"pointer",transition:"all .15s"}}>{v.label}</button>
+          ))}
         </div>
       </div>
-    </div>
+
+      {order.stato==="arrivato"&&onConsegna&&(
+        <button onClick={()=>onConsegna(order)} style={{width:"100%",background:"linear-gradient(135deg,#059669,#047857)",border:"none",borderRadius:18,padding:"18px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:12,boxShadow:"0 4px 20px rgba(5,150,105,.35)"}}>
+          <span style={{fontSize:30}}>🤝</span>
+          <div style={{textAlign:"left"}}>
+            <div style={{fontSize:17,fontWeight:800,color:"white"}}>Consegna al cliente</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,.8)"}}>Segna come consegnato e invia messaggio</div>
+          </div>
+        </button>
+      )}
+
+      <Btn label="🧾 Etichette" full onClick={onPrint}/>
+      <div style={{height:10}}/>
+      {!confirmDel
+        ?<Btn label="🗑️ Elimina ordine" variant="red" full onClick={()=>setConfirmDel(true)}/>
+        :<div style={{background:"#FFF1F2",borderRadius:14,padding:14,border:"1px solid #FECDD3"}}>
+          <div style={{fontSize:14,fontWeight:600,color:C.red,marginBottom:12}}>⚠️ Eliminare l'ordine?</div>
+          <div style={{display:"flex",gap:10}}>
+            <Btn label="Annulla" variant="secondary" full onClick={()=>setConfirmDel(false)}/>
+            <Btn label="Elimina" variant="red" full onClick={()=>{onDelete(order.id);onClose();}}/>
+          </div>
+        </div>}
+    </Sheet>
   );
 }
 
@@ -4016,6 +4136,13 @@ function MainApp() {
     if(viewRepair?.id===id)setViewRepair(updated);
   };
 
+  const handleRepairFieldChange=async(id,patch)=>{
+    const rep=repairs.find(r=>r.id===id);if(!rep)return;
+    const updated={...rep,...patch};
+    await withSync(()=>api.upsertRepair(updated));
+    if(viewRepair?.id===id)setViewRepair(updated);
+  };
+
   const handleSoftDelete=async id=>{await withSync(()=>api.softDeleteRepair(id));setViewRepair(null);};
   const handleWizardAddCustomer=async(data,cb)=>{await withSync(()=>api.upsertCustomer(data));cb(data.id);};
 
@@ -4096,29 +4223,7 @@ function MainApp() {
     setOrderForm(null);
     if(viewOrder?.id===id)setViewOrder(saved);
     const c=customers.find(x=>x.id===saved.customerId);
-    try{smartPrint(orderLabelHTML(saved,c||null));}catch(e){console.error(e);}
-    if(isNew){
-      if(c?.telefono){
-        let msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la ricezione del suo ordine n° ${numero}.`;
-        if(saved.prodotti?.length>0){
-          msg+="\n\n"+saved.prodotti.map(p=>{
-            const tot=(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1);
-            const acc=parseFloat(p.acconto)||0;
-            const rim=tot-acc;
-            let line=`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`;
-            if(tot>0)line+=`\n  Prezzo: ${tot.toFixed(2)} €`;
-            if(acc>0)line+=`\n  Acconto: ${acc.toFixed(2)} €`;
-            if(rim>0)line+=`\n  Da saldare: ${rim.toFixed(2)} €`;
-            if(p.dataConsegnaPrevista)line+=`\n  Consegna: ${fmtDate(p.dataConsegnaPrevista)}`;
-            return line;
-          }).join("\n");
-        }
-        msg+=`\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
-          .then(r=>r.json()).then(d=>console.log(`📲 WA conferma ordine inviato a ${c.nome} ${c.cognome}`))
-          .catch(e=>console.warn("WA conferma ordine non disponibile:",e.message));
-      }
-    }
+    if(isNew&&c)setOrderReceipt({order:saved,customer:c});
   };
 
   const handleOrderProductStatus=async(orderId,prodId,stato)=>{
@@ -4176,22 +4281,6 @@ function MainApp() {
   const handleDeleteOrder=async id=>{
     await withSync(()=>api.deleteOrder(id));
     setViewOrder(null);
-  };
-
-  const handleOrderWhatsApp=(order,customer,tipo)=>{
-    const totOrd=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
-    const totAcc=order.prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
-    const rimOrd=totOrd-totAcc;
-    const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
-    let msg="";
-    if(tipo==="arrivato"){
-      msg=`Gentile ${customer.nome} ${customer.cognome},\nle comunichiamo che il suo ordine n° ${order.numero} è arrivato ed è pronto per il ritiro.\n\n`;
-      if(order.prodotti.length>0)msg+=order.prodotti.map(p=>{const t=(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1);return`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}${t>0?` — ${t.toFixed(2)} €`:""}`;}).join("\n")+"\n";
-      msg+=totLines+`\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-    } else {
-      msg=`Gentile ${customer.nome} ${customer.cognome},\nconfermiamo la consegna dell'ordine n° ${order.numero}.${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
-    }
-    setWaToast({repair:order,customer,customMsg:msg,label:"💬 Invia messaggio"});
   };
 
   const handleSaveRepair=async form=>{
@@ -4286,7 +4375,7 @@ function MainApp() {
   const MODALS=(
     <>
       {orderForm!==null&&<OrderForm order={orderForm.id?orderForm:null} customers={customers} repairs={repairs} orders={orders} onSave={handleSaveOrder} onClose={()=>setOrderForm(null)} onAddedCustomer={handleWizardAddCustomer}/>}
-      {viewOrder&&<OrderDetail order={viewOrder} customers={customers} onClose={()=>setViewOrder(null)} onEdit={()=>{setOrderForm(viewOrder);setViewOrder(null);}} onStatusChange={handleOrderStatus} onDelete={handleDeleteOrder} onWhatsApp={handleOrderWhatsApp} onPrint={()=>setOrderReceipt({order:viewOrder,customer:customers.find(c=>c.id===viewOrder.customerId)||null})} onProductStatus={handleOrderProductStatus}/>}
+      {viewOrder&&<OrderDetail order={viewOrder} customers={customers} onClose={()=>setViewOrder(null)} onEdit={()=>{setOrderForm(viewOrder);setViewOrder(null);}} onStatusChange={handleOrderStatus} onDelete={handleDeleteOrder} onPrint={()=>setOrderReceipt({order:viewOrder,customer:customers.find(c=>c.id===viewOrder.customerId)||null})} onProductStatus={handleOrderProductStatus} onConsegna={handleConsegnaOrder}/>}
       {orderReceipt&&<OrderReceiptModal order={orderReceipt.order} customer={orderReceipt.customer} onClose={()=>setOrderReceipt(null)}/>}
       {importContatti&&<ImportContatti customers={customers} onImport={handleImportContatti} onClose={()=>setImportContatti(false)}/>}
       {showDuplicates&&<DuplicatesModal customers={customers} repairs={repairs} orders={orders} onMerge={handleMergeCustomers} onClose={()=>{setShowDuplicates(false);loadCustomers();loadRepairs();loadOrders();}}/>}
@@ -4297,7 +4386,7 @@ function MainApp() {
       {wizard&&<RepairWizard customers={customers} repairs={repairs} orders={orders} onSave={handleSaveRepair} onClose={()=>setWizard(false)} onAddedCustomer={handleWizardAddCustomer}/>}
       {customerForm!==null&&<CustomerForm customer={customerForm.id?customerForm:null} customers={customers} repairs={repairs} orders={orders} onSelectExisting={(c)=>{setCustomerForm(null);setViewCustomer(c);}} onSave={handleSaveCustomer} onClose={()=>setCustomerForm(null)}/>}
       {receiptModal&&<ReceiptModal repair={receiptModal.repair} customer={receiptModal.customer} onClose={()=>setReceiptModal(null)}/>}
-      {viewRepair&&<RepairDetail repair={viewRepair} customer={customers.find(c=>c.id===viewRepair.customerId)} ddt={getDDT(viewRepair)} onClose={()=>setViewRepair(null)} onReceipt={openReceipt} onStatusChange={handleStatus} onTogglePrev={handleTogglePrev} onToggleRichPrev={handleToggleRichPrev} onDelete={()=>handleSoftDelete(viewRepair.id)} onDateChange={handleDateChange} onConsegna={handleConsegna} onPreventivoChange={handlePreventivoChange} onAccontoChange={handleAccontoChange} onToggleInterna={handleToggleInterna} onToggleGaranzia={handleToggleGaranzia} onSpesaChange={handleSpesaChange} onPrezzoFinaleChange={handlePrezzoFinaleChange} onMarcaRefChange={handleMarcaRefChange} onNotaPreventivoChange={handleNotaPreventivoChange}/>}
+      {viewRepair&&<RepairDetail repair={viewRepair} customer={customers.find(c=>c.id===viewRepair.customerId)} ddt={getDDT(viewRepair)} onClose={()=>setViewRepair(null)} onReceipt={openReceipt} onStatusChange={handleStatus} onTogglePrev={handleTogglePrev} onToggleRichPrev={handleToggleRichPrev} onDelete={()=>handleSoftDelete(viewRepair.id)} onDateChange={handleDateChange} onConsegna={handleConsegna} onPreventivoChange={handlePreventivoChange} onAccontoChange={handleAccontoChange} onToggleInterna={handleToggleInterna} onToggleGaranzia={handleToggleGaranzia} onSpesaChange={handleSpesaChange} onPrezzoFinaleChange={handlePrezzoFinaleChange} onMarcaRefChange={handleMarcaRefChange} onNotaPreventivoChange={handleNotaPreventivoChange} onFieldChange={handleRepairFieldChange}/>}
       {viewCustomer&&<CustomerDetail customer={viewCustomer} repairs={repairs.filter(r=>r.customerId===viewCustomer.id)} onClose={()=>setViewCustomer(null)} onEdit={c=>{setViewCustomer(null);setCustomerForm(c);}} onOpenRepair={r=>{setViewCustomer(null);setViewRepair(r);}} onReceipt={openReceipt} onDelete={handleDeleteCustomer}/>}
       {ddtForm&&<DDTForm repairs={repairs} customers={customers} repairers={repairers} onSave={handleDDT} onClose={()=>setDdtForm(false)}/>}
       {editDDT&&<DDTForm repairs={repairs} customers={customers} repairers={repairers} existing={editDDT} onSave={handleEditDDT} onClose={()=>setEditDDT(null)}/>}
