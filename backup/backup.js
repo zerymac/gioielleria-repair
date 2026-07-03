@@ -14,7 +14,7 @@ const { execSync } = require("child_process");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const BACKUP_DIR   = path.join(require("os").homedir(), "Google Drive (zerrillopreziosi@gmail.com)", "gioielleria-backups");
 const KEEP_DAYS    = 30;
-const TABLES       = ["customers", "repairs", "ddts", "repairers", "orders"];
+const TABLES       = ["customers", "repairs", "ddts", "repairers", "orders", "quote_tokens"];
 
 /* ── Schema SQL da salvare nel backup ───────────────────────────── */
 const SCHEMA_SQL = `-- Schema Zerrillo Preziosi S.r.l. — generato automaticamente dal backup
@@ -29,6 +29,7 @@ create table if not exists public.customers (
   email              text,
   indirizzo          text,
   codice_fiscale     text,
+  note               text,
   created_at         timestamptz default now()
 );
 
@@ -40,17 +41,25 @@ create table if not exists public.repairs (
   tipo_lavoro                       text,
   descrizione                       text,
   materiali                         text,
+  marca                             text,
+  referenza                         text,
+  nota_preventivo                   text,
   problema                          text,
   status                            text default 'ricevuto',
   preventivo                        numeric,
   prezzo_finale                     numeric,
   preventivo_accettato              boolean default false,
+  preventivo_rifiutato              boolean default false,
   richiesta_preventivo_fornitore    boolean default false,
   riparazione_interna               boolean default false,
+  in_garanzia                       boolean default false,
   spesa                             numeric,
   acconto                           numeric,
   data_ricevuta                     date,
   data_consegna                     date,
+  data_spedita                      date,
+  data_rientrata                    date,
+  data_consegnata                   date,
   ddt_id                            text,
   note                              text,
   foto_url                          text,
@@ -58,19 +67,24 @@ create table if not exists public.repairs (
   items                             jsonb,
   mano                              text,
   dito                              text,
+  operatore                         text,
+  link_token                        text,
+  wa_accept_sent_at                 timestamptz,
+  wa_decline_sent_at                timestamptz,
   created_at                        timestamptz default now()
 );
 
 create table if not exists public.ddts (
-  id              text primary key,
-  numero          text,
-  data            date,
-  riparatore      jsonb,
-  riparazioni_ids jsonb,
-  stato           text,
-  data_rientro    date,
-  note            text,
-  created_at      timestamptz default now()
+  id                 text primary key,
+  numero             text,
+  data               date,
+  riparatore         jsonb,
+  riparazioni_ids    jsonb,
+  stato              text,
+  data_rientro       date,
+  ddt_rientro_numero text,
+  note               text,
+  created_at         timestamptz default now()
 );
 
 create table if not exists public.repairers (
@@ -96,28 +110,57 @@ create table if not exists public.orders (
   acconto                numeric,
   note                   text,
   foto_url               text,
+  operatore              text,
   created_at             timestamptz default now()
 );
 
+create table if not exists public.quote_tokens (
+  token       text primary key,
+  repair_id   text not null,
+  created_at  timestamptz default now(),
+  accepted_at timestamptz,
+  declined_at timestamptz
+);
+
+-- Colonne aggiuntive difensive (per DB creati da versioni precedenti dello schema)
+alter table public.customers add column if not exists note text;
+alter table public.repairs   add column if not exists marca text;
+alter table public.repairs   add column if not exists referenza text;
+alter table public.repairs   add column if not exists nota_preventivo text;
+alter table public.repairs   add column if not exists preventivo_rifiutato boolean default false;
+alter table public.repairs   add column if not exists in_garanzia boolean default false;
+alter table public.repairs   add column if not exists operatore text;
+alter table public.repairs   add column if not exists link_token text;
+alter table public.repairs   add column if not exists data_spedita date;
+alter table public.repairs   add column if not exists data_rientrata date;
+alter table public.repairs   add column if not exists data_consegnata date;
+alter table public.repairs   add column if not exists wa_accept_sent_at timestamptz;
+alter table public.repairs   add column if not exists wa_decline_sent_at timestamptz;
+alter table public.ddts      add column if not exists ddt_rientro_numero text;
+alter table public.orders    add column if not exists operatore text;
+
 -- Abilita RLS su tutte le tabelle
-alter table public.customers  enable row level security;
-alter table public.repairs     enable row level security;
-alter table public.ddts        enable row level security;
-alter table public.repairers   enable row level security;
-alter table public.orders      enable row level security;
+alter table public.customers    enable row level security;
+alter table public.repairs      enable row level security;
+alter table public.ddts         enable row level security;
+alter table public.repairers    enable row level security;
+alter table public.orders       enable row level security;
+alter table public.quote_tokens enable row level security;
 
 -- Policy: accesso completo con la chiave anon (app locale, non esposta a internet)
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename='customers'  and policyname='anon_all') then
-    create policy anon_all on public.customers  for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='repairs'    and policyname='anon_all') then
-    create policy anon_all on public.repairs    for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='ddts'       and policyname='anon_all') then
-    create policy anon_all on public.ddts       for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='repairers'  and policyname='anon_all') then
-    create policy anon_all on public.repairers  for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='orders'     and policyname='anon_all') then
-    create policy anon_all on public.orders     for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='customers'    and policyname='anon_all') then
+    create policy anon_all on public.customers    for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='repairs'      and policyname='anon_all') then
+    create policy anon_all on public.repairs      for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='ddts'         and policyname='anon_all') then
+    create policy anon_all on public.ddts         for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='repairers'    and policyname='anon_all') then
+    create policy anon_all on public.repairers    for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='orders'       and policyname='anon_all') then
+    create policy anon_all on public.orders       for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='quote_tokens' and policyname='anon_all') then
+    create policy anon_all on public.quote_tokens for all to anon using (true) with check (true); end if;
 end $$;
 `;
 

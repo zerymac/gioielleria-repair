@@ -1826,7 +1826,7 @@ function DDTPage({ddts,repairs,customers,onView,onNew}) {
   );
 }
 
-function SettingsPage({customers,repairs,ddts,repairers,onRestore,onSaveRepairer,onDeleteRepairer}) {
+function SettingsPage({customers,repairs,ddts,repairers,orders=[],onRestore,onSaveRepairer,onDeleteRepairer}) {
   const [deleted,setDeleted]=useState([]); const [showDeleted,setShowDeleted]=useState(false);
   const [showRepairers,setShowRepairers]=useState(false);
   const [restoring,setRestoring]=useState(false); const [msg,setMsg]=useState("");
@@ -1856,7 +1856,7 @@ function SettingsPage({customers,repairs,ddts,repairers,onRestore,onSaveRepairer
 
   const loadDeleted=async()=>{setDeleted(await api.getDeletedRepairs());setShowDeleted(true);};
   const doRestore=async(id)=>{await api.restoreRepair(id);setDeleted(d=>d.filter(r=>r.id!==id));};
-  const doExport=()=>{const bk={version:2,date:new Date().toISOString(),customers,repairs,ddts,repairers};const blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="gioielleria-backup-"+today()+".json";a.click();URL.revokeObjectURL(url);setMsg("✅ Backup esportato!");};
+  const doExport=()=>{const bk={version:2,date:new Date().toISOString(),customers,repairs,ddts,repairers,orders};const blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="gioielleria-backup-"+today()+".json";a.click();URL.revokeObjectURL(url);setMsg("✅ Backup esportato!");};
   const doImport=async(e)=>{const file=e.target.files?.[0];if(!file)return;setRestoring(true);setMsg("");try{const bk=JSON.parse(await file.text());if(!bk.customers||!bk.repairs)throw new Error("File non valido");await onRestore(bk);setMsg(`✅ Ripristino completato! ${bk.customers.length} clienti, ${bk.repairs.length} riparazioni.`);}catch(err){setMsg("❌ Errore: "+err.message);}setRestoring(false);};
 
   return (
@@ -4367,11 +4367,19 @@ function MainApp() {
   };
 
   const handleRestore=async bk=>{
+    /* Il backup notturno salva righe snake_case; l'export in-app camelCase.
+       Normalizza via i convertitori toX quando la riga e' in forma DB. */
+    const snake=(r,keys)=>keys.some(k=>k in (r||{}));
+    const asCustomer=(r)=>snake(r,["telefono_prefisso","codice_fiscale"])?toCustomer(r):r;
+    const asRepair=(r)=>snake(r,["customer_id","tipo_lavoro","prezzo_finale","data_ricevuta"])?toRepair(r):r;
+    const asDDT=(r)=>snake(r,["riparazioni_ids","data_rientro","ddt_rientro_numero"])?toDDT(r):r;
+    const asOrder=(r)=>snake(r,["customer_id","data_ordine","data_consegna_prevista"])?toOrder(r):r;
     await withSync(async()=>{
-      for(const c of bk.customers||[])await api.upsertCustomer(c);
-      for(const r of bk.repairs||[])await api.upsertRepair(r);
-      for(const d of bk.ddts||[])await api.upsertDDT(d);
+      for(const c of bk.customers||[])await api.upsertCustomer(asCustomer(c));
+      for(const r of bk.repairs||[])await api.upsertRepair(asRepair(r));
+      for(const d of bk.ddts||[])await api.upsertDDT(asDDT(d));
       for(const r of bk.repairers||[])await api.upsertRepairer(r);
+      for(const o of bk.orders||[])await api.upsertOrder(asOrder(o));
     });
   };
 
@@ -4410,7 +4418,7 @@ function MainApp() {
       {tab==="customers"&&<CustomersPage customers={customers} repairs={repairs} onView={setViewCustomer} onNew={()=>setCustomerForm({})} onImport={()=>setImportContatti(true)} onDuplicates={()=>setShowDuplicates(true)}/>}
       {tab==="orders"&&<OrdersPage orders={orders} customers={customers} onView={setViewOrder} onNew={()=>setOrderForm({})} onConsegna={handleConsegnaOrder}/>}
       {tab==="ddt"&&<DDTPage ddts={ddts} repairs={repairs} customers={customers} onView={setViewDDT} onNew={()=>setDdtForm(true)}/>}
-      {tab==="settings"&&<SettingsPage customers={customers} repairs={repairs} ddts={ddts} repairers={repairers} onRestore={handleRestore} onSaveRepairer={handleSaveRepairer} onDeleteRepairer={handleDeleteRepairer}/>}
+      {tab==="settings"&&<SettingsPage customers={customers} repairs={repairs} ddts={ddts} repairers={repairers} orders={orders} onRestore={handleRestore} onSaveRepairer={handleSaveRepairer} onDeleteRepairer={handleDeleteRepairer}/>}
     </>
   );
 
