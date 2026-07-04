@@ -5,7 +5,30 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
-### Sessione audit — Fase 2 correzioni (04/07/2026) — branch `fix/perdite-dati`
+### Hotfix stato ordine (04/07/2026) — WA su "CAMBIA STATO ORDINE" — deployato
+
+Segnalato in produzione subito dopo il go-live della Sessione 2: cambiando lo stato di
+un ordine dal controllo **"CAMBIA STATO ORDINE"** non partiva il WhatsApp automatico.
+
+- **Causa**: esistono due controlli distinti. La pillola **sul singolo articolo**
+  (`handleOrderProductStatus`) aggiorna il prodotto e, su "arrivato", invia il WA. Il
+  controllo **a livello ordine** (`handleOrderStatus`) invece aggiornava solo
+  `orders.stato` (via `updateOrderStatus`), lasciando i prodotti disallineati e senza
+  inviare nulla. Su ordini a 1 articolo questo rompeva anche il bottone "Consegna al
+  cliente": il fix A9 consegna solo i prodotti `stato==="arrivato"`, ma il prodotto era
+  rimasto "ordinato" → bottone inerte.
+- **Fix** (`handleOrderStatus`): il cambio stato ordine ora **propaga lo stato scelto a
+  tutti i prodotti** (coerenza ordine/prodotti) e, su "arrivato", invia **un** WhatsApp
+  di riepilogo al cliente (numero E.164 via `waPhone`, fire-and-forget). **Decisione col
+  proprietario**: propaga a tutti + 1 messaggio (vale sia per ordini a 1 articolo sia con
+  più articoli; la pillola per-articolo resta invariata).
+- **Test**: propagazione + 1 WA; consegna attiva su ordine a 1 articolo (38 test verdi).
+- **Deploy**: branch `fix/stato-ordine-wa` → merge fast-forward in `gestionale` (`a6557ab`),
+  riavvio della sola app React (print server/WhatsApp non toccati).
+
+### Sessione audit — Fase 2 correzioni (04/07/2026) — branch `fix/perdite-dati` — MERGIATO e LIVE
+
+Audit tecnico completo (`AUDIT_REPORT.md`, `audit/FASE1-ANALISI.md`, `audit/FASE2-RISULTATI.md`) seguito da **Sessione 2**: cinque fix "perdita silenziosa di dati", ognuno un commit con i suoi test, su branch `fix/perdite-dati` (base = codice reale di produzione). **Mergiato in `gestionale` il 04/07/2026** (merge commit `596c861`, dopo consolidamento del codice di produzione in `b8a3cc2`) e deployato con riavvio dei servizi; checklist pre-merge 1–3 superata (A4 verificato post-merge, C5 coperto dai test). Suite di verifica: 36 test (mock Supabase/WhatsApp/stampa, nessuna scrittura su produzione). Nota di rilascio per gli operatori in `audit/SESSIONE2-RILASCIO.md`.
 
 Audit tecnico completo (`AUDIT_REPORT.md`, `audit/FASE1-ANALISI.md`, `audit/FASE2-RISULTATI.md`) seguito da **Sessione 2**: cinque fix "perdita silenziosa di dati", ognuno un commit con i suoi test, su branch `fix/perdite-dati` (base = codice reale di produzione). **Non ancora mergiato su `gestionale`** — merge deciso dal proprietario dopo la checklist in `audit/SESSIONE2-RILASCIO.md`. Suite di verifica: 36 test (mock Supabase/WhatsApp/stampa, nessuna scrittura su produzione).
 
