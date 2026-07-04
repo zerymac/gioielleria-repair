@@ -113,6 +113,12 @@ function buildDeclineShopMessage(repair) {
   return lines.join('\n');
 }
 
+/* ── Marca in DB che il WA di accettazione è stato inviato (best-effort) ── */
+async function markAcceptSent(supabase, repairId) {
+  const { error } = await supabase.from('repairs').update({ wa_accept_sent_at: new Date().toISOString() }).eq('id', repairId);
+  if (error && error.code !== 'PGRST204') console.warn(`⚠️  Impossibile marcare wa_accept_sent_at per ${repairId}:`, error.message);
+}
+
 /* ── Gestisce accettazione preventivo ── */
 async function handleAccepted(supabase, repairId) {
   if (waSent.has(repairId)) return;
@@ -134,6 +140,7 @@ async function handleAccepted(supabase, repairId) {
           console.log(`✅ WA accettazione inviato al negozio per ${repair.numero}`);
         }
       }
+      await markAcceptSent(supabase, repairId);
       return;
     }
 
@@ -159,10 +166,18 @@ async function handleAccepted(supabase, repairId) {
       }
     }
 
+    await markAcceptSent(supabase, repairId);
+
   } catch (e) {
     waSent.delete(repairId);
     console.error(`❌ Errore WA accettazione per ${repairId}:`, e.message);
   }
+}
+
+/* ── Marca in DB che il WA di disdetta è stato inviato (best-effort) ── */
+async function markDeclineSent(supabase, repairId) {
+  const { error } = await supabase.from('repairs').update({ wa_decline_sent_at: new Date().toISOString() }).eq('id', repairId);
+  if (error && error.code !== 'PGRST204') console.warn(`⚠️  Impossibile marcare wa_decline_sent_at per ${repairId}:`, error.message);
 }
 
 /* ── Gestisce rifiuto preventivo ── */
@@ -210,6 +225,8 @@ async function handleDeclined(supabase, repairId) {
       }
     }
 
+    await markDeclineSent(supabase, repairId);
+
   } catch (e) {
     waDeclineSent.delete(repairId);
     console.error(`❌ Errore WA disdetta per ${repairId}:`, e.message);
@@ -218,21 +235,23 @@ async function handleDeclined(supabase, repairId) {
 
 /* ── Supabase Realtime: ascolta cambi su repairs ── */
 async function startRealtimeSubscription(supabase) {
+  /* Pre-popola i set con quelli GIÀ notificati (wa_*_sent_at valorizzato).
+     I `preventivo_accettato=true` senza timestamp WA sono pending → recuperati sotto. */
   const { data: existing } = await supabase
     .from('repairs')
     .select('id')
-    .eq('preventivo_accettato', true)
+    .not('wa_accept_sent_at', 'is', null)
     .eq('eliminata', false);
   if (existing) existing.forEach(r => waSent.add(r.id));
 
   const { data: declined } = await supabase
     .from('repairs')
     .select('id')
-    .eq('preventivo_rifiutato', true)
+    .not('wa_decline_sent_at', 'is', null)
     .eq('eliminata', false);
   if (declined) declined.forEach(r => waDeclineSent.add(r.id));
 
-  console.log(`📋 ${waSent.size} accettati, ${waDeclineSent.size} disdettati — ignorati al riavvio`);
+  console.log(`📋 ${waSent.size} accettati, ${waDeclineSent.size} disdettati — già notificati`);
 
   supabase
     .channel('wa-preventivi')
@@ -250,6 +269,44 @@ async function startRealtimeSubscription(supabase) {
     .subscribe(status => {
       if (status === 'SUBSCRIBED') console.log('📡 Supabase Realtime attivo — in ascolto preventivi');
     });
+
+  /* Reconciliation: preventivi accettati/rifiutati mentre il bot era down.
+     Query per accettato_true + wa_accept_sent_at IS NULL → li processa uno a uno. */
+  await reconcilePending(supabase);
+}
+
+async function reconcilePending(supabase) {
+  try {
+    const { data: pendingAccept } = await supabase
+      .from('repairs')
+      .select('id, numero')
+      .eq('preventivo_accettato', true)
+      .is('wa_accept_sent_at', null)
+      .eq('eliminata', false);
+    if (pendingAccept?.length) {
+      console.log(`🔁 ${pendingAccept.length} preventivi accettati in sospeso — invio ora`);
+      for (const r of pendingAccept) {
+        console.log(`🔔 Recupero accettazione: ${r.numero}`);
+        await handleAccepted(supabase, r.id);
+      }
+    }
+
+    const { data: pendingDecline } = await supabase
+      .from('repairs')
+      .select('id, numero')
+      .eq('preventivo_rifiutato', true)
+      .is('wa_decline_sent_at', null)
+      .eq('eliminata', false);
+    if (pendingDecline?.length) {
+      console.log(`🔁 ${pendingDecline.length} preventivi rifiutati in sospeso — invio ora`);
+      for (const r of pendingDecline) {
+        console.log(`🔔 Recupero disdetta: ${r.numero}`);
+        await handleDeclined(supabase, r.id);
+      }
+    }
+  } catch (e) {
+    console.error('❌ Errore reconcile pending:', e.message);
+  }
 }
 
 /* ── Inizializza il client WhatsApp ── */

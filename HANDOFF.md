@@ -5,6 +5,69 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Funzionalità aggiunte in questa sessione (03/07/2026) — fix perdita WA su preventivo accettato mentre bot down
+
+- **Problema riscontrato**: R2026-0215 accettato via GitHub Pages il 01/07/2026 10:18 UTC, ma nessun WA a riparatore/negozio. Il `console.log` `🔔 Preventivo accettato: R2026-0215` non appare in `/tmp/zerrillo-print.log`.
+- **Causa**: `wa-bot.js:startRealtimeSubscription` pre-popolava `waSent` con **tutti** i `preventivo_accettato=true` all'avvio (per evitare replay). Se il bot era down/scollegato al momento dell'evento Realtime → evento perso → al riavvio il repair finisce in `waSent` come "già processato" senza esserlo mai stato.
+- **Fix strutturale**:
+  - Nuove colonne `repairs.wa_accept_sent_at timestamptz` e `wa_decline_sent_at timestamptz` — vera source of truth di "abbiamo notificato?"
+  - `startRealtimeSubscription` pre-popola i set **solo** dove `wa_accept_sent_at IS NOT NULL` (analogo per declined)
+  - Nuova funzione `reconcilePending(supabase)` chiamata all'avvio: query `preventivo_accettato=true AND wa_accept_sent_at IS NULL AND eliminata=false` → chiama `handleAccepted` per ognuno → recupero automatico degli eventi persi
+  - `handleAccepted` / `handleDeclined` chiamano `markAcceptSent` / `markDeclineSent` alla fine del percorso di successo → aggiorna il timestamp in DB
+  - `markAcceptSent` / `markDeclineSent`: `UPDATE repairs SET wa_accept_sent_at = now()` con fallback su errore `PGRST204` (colonna mancante — log warning ma non crasha)
+- **Backfill anti-spam**: nella migration, `UPDATE ... SET wa_accept_sent_at = now() WHERE preventivo_accettato=true AND id != 'u5bmyofy'` — così solo R2026-0215 rimane pending e viene recuperato dalla reconciliation; tutti gli altri già notificati sono "protetti" dal reinvio.
+- **Log invariati per Realtime**: la subscription rimane identica, solo la logica del pre-popolamento cambia. I nuovi log al riavvio sono:
+  - `📋 N accettati, M disdettati — già notificati` (rimpiazza "ignorati al riavvio")
+  - `🔁 K preventivi accettati in sospeso — invio ora` (solo se `reconcilePending` trova pending)
+  - `🔔 Recupero accettazione: Rxxxx-xxxx` per ogni recupero
+- **Verifica in produzione (03/07/2026)**: migration applicata via Supabase Studio, backfill esclude `u5bmyofy`, LaunchAgent riavviato con `launchctl unload/load`. Log post-riavvio conferma:
+  ```
+  📋 13 accettati, 1 disdettati — già notificati
+  🔁 1 preventivi accettati in sospeso — invio ora
+  🔔 Recupero accettazione: R2026-0215
+  ✅ WA accettazione inviato a AVERLA LAVORAZIONI ORAFE… per R2026-0215
+  ✅ WA accettazione inviato al negozio per R2026-0215 (esterna)
+  ```
+  Entrambi i WA (riparatore + negozio) partiti correttamente dalla reconciliation. Riparatore era AVERLA (telefono presente nello snapshot DDT, quindi no fallback su registro `repairers`).
+
+### Funzionalità aggiunte in questa sessione (03/07/2026) — inline edit riparazioni + parità UX ordini/riparazioni
+
+- **Inline edit completo in `RepairDetail`**:
+  - Nuovi campi editabili con ✏️: **descrizione oggetto** (via pencil nell'header, textarea con Salva/Annulla), **materiali**, **problema** (textarea), **note interne** (nuova card in fondo), **operatore** (pill selector Adri/Massi/Jenny/Manu + "Nessuno")
+  - Handler generico `handleRepairFieldChange(id, patch)` — sostituisce la necessità di 1 handler per campo; accetta oggetto patch e fa merge + `upsertRepair`
+  - Prop `onFieldChange` in `RepairDetail`
+  - Categoria / tipo lavoro / mano / dito / foto **non** editabili di proposito — sono "identitari" dell'oggetto
+
+- **`OPERATORS` estratto a scope modulo** (era duplicato in `RepairWizard` e `OrderForm`):
+  - Adesso a livello top del file accanto a `WORK_TYPES`
+  - Rimosse le 2 definizioni locali
+  - Riutilizzato in `RepairDetail` (pill selector) e `RepairCard` (badge colorato)
+
+- **Badge operatore in `RepairCard`**: chip colorato `👷 Nome` nella metadata row della lista riparazioni, con background/color della palette operatore (`op.bg`/`op.color`) — a colpo d'occhio distingui chi ha preso la riparazione. Appare solo se `r.operatore` è valorizzato.
+
+- **Disabilitata stampa automatica ordini**:
+  - Rimosso `smartPrint(orderLabelHTML(...))` da `handleSaveOrder` (partiva a ogni salvataggio nuovo/edit)
+  - Label bottone wizard: "✓ Crea ordine e stampa" → "✓ Crea ordine"
+
+- **Disabilitato auto-invio WA su creazione ordine + `OrderReceiptModal` automatico**:
+  - `handleSaveOrder` non chiama più `fetch /wa/send-bulk` automaticamente
+  - Su ordine nuovo → apre `OrderReceiptModal` (esattamente come `ReceiptModal` per riparazioni)
+  - Utente sceglie manualmente: 🖨️ solo stampa, 📤 stampa + WA, oppure WA/Email/SMS separati
+  - Messaggio WA nel modal aggiornato con marca, prezzo, acconto, rimanenza da pagare, data consegna per prodotto (rich come quello che partiva automaticamente prima)
+
+- **`OrderDetail` riscritto con layout di `RepairDetail`**:
+  - Wrapper cambiato da modal custom (`position:fixed` + sticky header) a `Sheet` (bottom-sheet mobile, centered desktop)
+  - Header card: icona 📦 con background colorato secondo `ORDER_STATUSES[order.stato].bg`, `OrderStatusBadge`, pill operatore colorato inline, titolo con "N articolo/i" + preview primo prodotto, ✏️ per apertura wizard modifica
+  - Card cliente: nome + telefono + `WABtn` inline (stesso layout della card cliente in `RepairDetail`), data ordine, consegna prevista (earliest dei prodotti), numero
+  - Card articoli: identica alla precedente (foto, prezzo/acconto/scadenza, pill stato espandibile per cambio stato per-prodotto) + riga "Acconto totale" aggiunta ai totali
+  - Card note interne (se presenti)
+  - "CAMBIA STATO ORDINE" — pill selector orizzontale (stesso pattern di `RepairDetail`)
+  - Bottone "🤝 Consegna al cliente" (solo se `stato==="arrivato"`) — gradient verde, apre `WAToast` con messaggio consegna precompilato
+  - "🧾 Etichette" → apre `OrderReceiptModal`
+  - "🗑️ Elimina ordine" con conferma inline (pattern identico a `RepairDetail`)
+
+- **Rimosso `handleOrderWhatsApp` dead code**: era passato come prop `onWhatsApp` a `OrderDetail` ma il body non lo usava; dopo il refactor la prop non serve più
+
 ### Funzionalità aggiunte in questa sessione (26/06/2026) — fix multi-device + UX consegna
 
 - **`printServerBase()` helper — fix WA da iPhone**:
@@ -238,6 +301,16 @@ alter table public.orders add column if not exists operatore text;
 -- DDT rientro fornitore
 alter table public.ddts add column if not exists ddt_rientro_numero text;
 
+-- Timestamps WA notification (sessione 03/07/2026) — fix perdita eventi Realtime
+alter table public.repairs add column if not exists wa_accept_sent_at  timestamptz;
+alter table public.repairs add column if not exists wa_decline_sent_at timestamptz;
+-- Backfill: marca "già notificati" tutti gli accettati/rifiutati esistenti
+-- ECCETTO R2026-0215 (u5bmyofy) che era rimasto pending → sarà recuperato al riavvio del bot
+update public.repairs set wa_accept_sent_at = coalesce(wa_accept_sent_at, now())
+  where preventivo_accettato = true and eliminata = false and id != 'u5bmyofy';
+update public.repairs set wa_decline_sent_at = coalesce(wa_decline_sent_at, now())
+  where preventivo_rifiutato = true and eliminata = false;
+
 -- Colonne repairs (eseguire se non già presenti)
 alter table public.repairs add column if not exists operatore text;
 alter table public.repairs add column if not exists acconto numeric;
@@ -317,6 +390,23 @@ Vantaggi:
 - **Fase 2** — Carico prodotti: form inserimento + import CSV da ProWeb
 - **Fase 3** — Vendite: carrello → ricevuta → aggiornamento giacenza
 - **Fase 4** — Quotazione metalli: API GoldAPI.io + calcolatrice peso/titolo
+
+## What Worked (aggiornato 03/07/2026 — fix perdita WA)
+- **Colonna `wa_*_sent_at` come source of truth**: prima il "già notificato" era derivato da `preventivo_accettato=true`, che è lo *stato del preventivo*, non lo stato dell'invio WA. Se il bot era down all'evento Realtime, la logica non aveva modo di distinguere "accettato e già notificato" da "accettato ma mai processato". Aggiungere un timestamp dedicato separa i due concetti e rende il sistema recovery-friendly.
+- **Reconciliation on-startup vs solo Realtime**: Realtime è "at-most-once" — se sei down, l'evento è perso senza replay. Ogni volta che il bot parte, `reconcilePending` scansiona `preventivo_accettato=true AND wa_accept_sent_at IS NULL` e riprocessa il gap. Non serve retry policy sul Realtime — basta usarlo come "fast path" e la reconciliation come "slow path safety net".
+- **Backfill selettivo nella migration**: `UPDATE ... WHERE id != 'u5bmyofy'` — un solo comando SQL protegge tutti i 13 già-notificati dal reinvio e lascia il pending esposto al recovery automatico. Alternativa più fragile (backfilltutto + inviare a mano R2026-0215) sarebbe stata error-prone.
+- **`markAcceptSent` con fallback su `PGRST204`**: se qualcuno riavvia il bot prima di aver applicato la migration, `handleAccepted` non crasha — logga warning e prosegue. Grazia in caso di ordine di operazioni sbagliato dell'operatore umano.
+- **Verificare con Monitor+grep+log**: `tail -F | grep --line-buffered "Recupero|WA accettazione|Realtime attivo"` sul log LaunchAgent — pattern replicabile per confermare qualsiasi restart del wa-bot.
+
+## What Worked (aggiornato 03/07/2026 — inline edit + parità ordini/riparazioni)
+- **Handler generico `handleRepairFieldChange(id, patch)`**: sostituisce N handler-per-campo con uno solo che accetta un patch object e fa merge. Meno codice, stesso comportamento di `withSync(()=>api.upsertRepair(updated))` + `setViewRepair` se aperto.
+- **Pill selector inline per l'operatore**: invece di un dropdown, quattro chip colorate (Adri/Massi/Jenny/Manu) + "Nessuno" per rimuovere — un tap solo, no aprire/chiudere menu.
+- **Estrarre `OPERATORS` a scope modulo**: prima duplicato in `RepairWizard` e `OrderForm`, ora anche `RepairDetail` e `RepairCard` lo usano per i colori del badge. Se serve aggiungere un operatore basta modificare 1 posto.
+- **Badge operatore colorato in `RepairCard`**: `op.bg` come background + `op.color` come testo — riconoscibilità istantanea a colpo d'occhio in una lista lunga (Massi=blu, Jenny=rosa, ecc.), meglio di un `👷 Nome` monocromatico.
+- **Rimuovere auto-print e auto-WA su creazione ordine**: portare la UX ordini alla parità di quella riparazioni (il modal `OrderReceiptModal` aveva già tutte le opzioni, bastava aprirlo dopo `setOrderForm(null)`) — utente mantiene controllo esplicito su cosa fare.
+- **Riscrivere `OrderDetail` con lo stesso layout di `RepairDetail`**: sostituire il modal custom con `Sheet` + card `IOSCard`/`IOSRow` — coerenza tra le due schede, meno cognitive load per l'utente, meno codice duplicato per lo styling.
+- **`onEdit` come pencil nell'header card**: invece di un bottone separato in fondo, ✏️ visibile subito nell'header (come per marca/ref, spesa, ecc. in `RepairDetail`). Su ordini apre il wizard `OrderForm` in edit mode allo step 6.
+- **`sh.bg` (bg dello stato) come background dell'icona 📦**: la card header cambia colore in base allo stato — feedback visivo immediato su "questo ordine è ordinato/arrivato/consegnato".
 
 ## What Worked (aggiornato 26/06/2026 — fix multi-device)
 - **`window.location.hostname` per derivare l'URL del server di stampa/WA**: meglio di un override fisso da Impostazioni — l'app "funziona e basta" sia su localhost (Mac) sia via IP (iPhone). L'override `localStorage.printServerUrl` resta per casi particolari (es. tunnel).
