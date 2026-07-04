@@ -4268,9 +4268,24 @@ function MainApp() {
   };
 
   const handleOrderStatus=async(id,stato)=>{
-    await withSync(()=>api.updateOrderStatus(id,stato));
-    setOrders(prev=>prev.map(o=>o.id===id?{...o,stato}:o));
-    if(viewOrder?.id===id)setViewOrder(prev=>({...prev,stato}));
+    const ord=(viewOrder?.id===id?viewOrder:orders.find(o=>o.id===id));if(!ord)return;
+    const prodotti=ord.prodotti.map(p=>({...p,stato}));
+    const updated={...ord,prodotti,stato};
+    await withSync(()=>api.upsertOrder(updated));
+    setOrders(prev=>prev.map(o=>o.id===id?updated:o));
+    if(viewOrder?.id===id)setViewOrder(updated);
+    const c=customers.find(x=>x.id===ord.customerId);
+    if(c?.telefono&&stato==="arrivato"){
+      const totOrd=prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
+      const totAcc=prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
+      const rimOrd=totOrd-totAcc;
+      const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
+      const artLines=prodotti.map(p=>`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`).join("\n");
+      const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo ordine n° ${ord.numero} è arrivato ed è pronto per il ritiro:\n${artLines}${totLines}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+      fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
+        .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
+        .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
+    }
   };
 
   const handleConsegnaOrder=async order=>{

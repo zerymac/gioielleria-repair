@@ -124,3 +124,47 @@ test("FIX A9 — ordine con tutti gli articoli arrivati: consegna completa, stat
   const waUrl = window.open.mock.calls.map(([u]) => decodeURIComponent(String(u))).find((u) => u.includes("wa.me"));
   expect(waUrl).not.toMatch(/parziale/);
 });
+
+test("FIX ordine — 'CAMBIA STATO ORDINE' → Arrivato propaga a TUTTI i prodotti e invia 1 WA riepilogo", async () => {
+  __fake.seed("orders", [{
+    id: "o5", numero: "ORD2026-0005", customer_id: "c1", stato: "ordinato", data_ordine: "2026-06-20",
+    prodotti: [
+      { id: "p1", descrizione: "Anello", stato: "ordinato", prezzoVendita: 100, quantita: 1, acconto: 20 },
+      { id: "p2", descrizione: "Bracciale", stato: "ordinato", prezzoVendita: 50, quantita: 1 },
+    ],
+  }]);
+  await gotoOrders();
+  click(screen.getByText("ORD2026-0005"));
+  const sect = (await screen.findByText("CAMBIA STATO ORDINE")).parentElement;
+  click(within(sect).getByText("Arrivato"));
+
+  await waitFor(() => expect(__fake.db.orders[0].stato).toBe("arrivato"));
+  // propagato a tutti i prodotti (coerenza ordine/prodotti)
+  expect(__fake.db.orders[0].prodotti.every((p) => p.stato === "arrivato")).toBe(true);
+
+  // esattamente 1 WhatsApp, riepilogo ordine, in E.164
+  const waCalls = global.fetch.mock.calls.filter(([u]) => String(u).includes("/wa/send-bulk"));
+  expect(waCalls).toHaveLength(1);
+  const body = JSON.parse(waCalls[0][1].body);
+  expect(body.messages).toHaveLength(1);
+  expect(body.messages[0].telefono).toBe("+393331234567");
+  expect(body.messages[0].messaggio).toMatch(/ORD2026-0005/);
+  expect(body.messages[0].messaggio).toMatch(/arrivat|pronto/i);
+});
+
+test("FIX ordine — ordine a 1 articolo: stato ordine ad Arrivato rende attiva la consegna (no bottone morto per A9)", async () => {
+  __fake.seed("orders", [{
+    id: "o6", numero: "ORD2026-0006", customer_id: "c1", stato: "ordinato", data_ordine: "2026-06-20",
+    prodotti: [{ id: "p1", descrizione: "Anello solo", stato: "ordinato", quantita: 1 }],
+  }]);
+  await gotoOrders();
+  click(screen.getByText("ORD2026-0006"));
+  const sect = (await screen.findByText("CAMBIA STATO ORDINE")).parentElement;
+  click(within(sect).getByText("Arrivato"));
+  await waitFor(() => expect(__fake.db.orders[0].prodotti[0].stato).toBe("arrivato"));
+
+  // ora 'Consegna al cliente' consegna davvero (il prodotto è arrivato)
+  click((await screen.findAllByText("Consegna al cliente"))[0]);
+  await waitFor(() => expect(__fake.db.orders[0].prodotti[0].stato).toBe("consegnato"));
+  expect(__fake.db.orders[0].stato).toBe("consegnato");
+});
