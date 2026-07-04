@@ -20,12 +20,23 @@ let realtimeStarted = false;
 /* ── Delay casuale per evitare rilevamento spam da WhatsApp ── */
 const waDelay = () => new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
 
-/* ── Formatta numero telefono in formato WhatsApp (@c.us) ── */
+/* ── Formatta numero telefono in formato WhatsApp (@c.us) ──
+   Un numero gia' internazionale ('+' o '00') conserva il proprio prefisso paese;
+   un numero nazionale nudo viene trattato come italiano (prefisso 39). */
 function formatPhone(telefono) {
-  const digits = (telefono || '').replace(/\D/g, '');
+  const raw = (telefono || '').trim();
+  if (!raw) return null;
+  if (raw.startsWith('+')) {
+    const d = raw.replace(/\D/g, '');
+    return d ? d + '@c.us' : null;
+  }
+  if (raw.startsWith('00')) {
+    const d = raw.slice(2).replace(/\D/g, '');
+    return d ? d + '@c.us' : null;
+  }
+  const digits = raw.replace(/\D/g, '');
   if (!digits) return null;
-  const withPrefix = digits.startsWith('39') ? digits : '39' + digits;
-  return withPrefix + '@c.us';
+  return '39' + digits + '@c.us';
 }
 
 /* ── Recupera riparazione da Supabase ── */

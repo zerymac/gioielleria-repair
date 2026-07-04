@@ -5,6 +5,18 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Sessione audit — Fase 2 correzioni (04/07/2026) — branch `fix/perdite-dati`
+
+Audit tecnico completo (`AUDIT_REPORT.md`, `audit/FASE1-ANALISI.md`, `audit/FASE2-RISULTATI.md`) seguito da **Sessione 2**: cinque fix "perdita silenziosa di dati", ognuno un commit con i suoi test, su branch `fix/perdite-dati` (base = codice reale di produzione). **Non ancora mergiato su `gestionale`** — merge deciso dal proprietario dopo la checklist in `audit/SESSIONE2-RILASCIO.md`. Suite di verifica: 36 test (mock Supabase/WhatsApp/stampa, nessuna scrittura su produzione).
+
+- **C2 — wizard riparazioni salva marca/referenza/notaPreventivo** (`handleSaveRepair`): erano raccolti negli step 4/6 e mostrati nel riepilogo ma scartati al salvataggio. Aggiunti all'oggetto principale di `allItems` (gli item multi-oggetto già li portavano) e al record `n`; `notaPreventivo` è form-level, applicato a ogni oggetto.
+- **A9 — consegna ordine solo dei prodotti arrivati** (`handleConsegnaOrder`): prima marcava consegnati **tutti** i prodotti. Ora consegna solo i `stato==="arrivato"`, ricalcola lo stato ordine dai prodotti (resta aperto se altri non arrivati), e il WA elenca solo il consegnato con dicitura "parziale". **Decisione col proprietario**: consegna parziale (non "tutto o niente").
+- **A4 — prefissi internazionali nei WA automatici**: `formatPhone` (wa-bot) anteponeva '39' a qualsiasi numero. Ora `+`/`00` conservano il prefisso paese; solo il nazionale nudo diventa italiano. Lato app, i punti che inviano WA bulk/arrivato passano E.164 via il nuovo helper `waPhone(c)=prefisso+telefono`.
+- **C5 — restore compatibile col backup notturno**: `handleRestore` normalizza le righe snake_case via i convertitori `toX` (prima `telefonoPrefisso`/`codiceFiscale` camelCase non venivano letti → prefisso azzerato a +39, CF perso). Aggiunto il restore/export di `orders` (prima omesso). In `backup.js`: `quote_tokens` in `TABLES` e `SCHEMA_SQL` rigenerato con tutte le colonne reali. **Rettifica**: il backup notturno raggiunge Google Drive (verificato per inode); il problema era la lettura in-app, non la scrittura.
+- **C3 — errori DB visibili**: le `api.*` ignoravano `error`, `withSync` non catturava, le `getX` confondevano vuoto/errore. Ora: flag di errore condiviso (`_writeError`) segnalato da ogni scrittura e letto da `withSync` → **toast rosso "Salvataggio non riuscito — riprova"**; le 5 `getX` ritornano `{data,error}` e le `loadX` su errore **non svuotano** le liste + **banner "Connessione al database persa"**; indicatore sync onesto (rosso). Vedi la nota di rilascio per l'impatto sugli operatori.
+
+**Follow-up rimandati**: C1 sicurezza RLS/chiave pubblica (Sessione 1, prioritario); C4 numerazione DDT/ordine/riparazione con contatore atomico (Sessione 3); A1/A3/A8 outbox WhatsApp con retry (Sessione 4); warning eslint preesistenti e estrazione moduli da `App.js`.
+
 ### Funzionalità aggiunte in questa sessione (03/07/2026) — fix perdita WA su preventivo accettato mentre bot down
 
 - **Problema riscontrato**: R2026-0215 accettato via GitHub Pages il 01/07/2026 10:18 UTC, ma nessun WA a riparatore/negozio. Il `console.log` `🔔 Preventivo accettato: R2026-0215` non appare in `/tmp/zerrillo-print.log`.

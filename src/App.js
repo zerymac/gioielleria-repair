@@ -36,6 +36,7 @@ const ddtNum = (n) => `DDT${new Date().getFullYear()}-${String(n).padStart(4, "0
 const ordNum = (n) => `ORD${new Date().getFullYear()}-${String(n).padStart(4, "0")}`;
 const fullPhone = (c) => c?.telefonoPrefisso && c?.telefono ? (c.telefonoPrefisso + c.telefono).replace(/\D/g, "") : (c?.telefono || "").replace(/\D/g, "");
 const displayPhone = (c) => c?.telefono ? `${c.telefonoPrefisso || "+39"} ${c.telefono}` : "";
+const waPhone = (c) => c?.telefono ? `${c.telefonoPrefisso || "+39"}${c.telefono}` : "";
 
 function saveToContacts(c) {
   const lines = [
@@ -126,22 +127,29 @@ const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, c
 const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, ddtRientroNumero:r.ddt_rientro_numero||null, note:r.note });
 const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, operatore:r.operatore||null, createdAt:r.created_at });
 
+/* Errore di scrittura condiviso: ogni api.* di scrittura lo segnala qui;
+   withSync lo legge dopo l'operazione per mostrare il feedback all'operatore. */
+let _writeError=null;
+const _noteWriteErr=(error)=>{ if(error){ _writeError=error; console.error("DB write error:",error); } };
+
 const api = {
+  _takeWriteError(){ const e=_writeError; _writeError=null; return e; },
   async getCustomers() {
   let all=[];
   let page=0;
   const size=1000;
   while(true){
-    const {data}=await supabase.from("customers").select("*").order("cognome").range(page*size,(page+1)*size-1);
+    const {data,error}=await supabase.from("customers").select("*").order("cognome").range(page*size,(page+1)*size-1);
+    if(error)return {data:[],error};
     if(!data||!data.length)break;
     all=[...all,...data.map(toCustomer)];
     if(data.length<size)break;
     page++;
   }
-  return all;
+  return {data:all,error:null};
 },
-  async upsertCustomer(c) { await supabase.from("customers").upsert({ id:c.id, nome:c.nome, cognome:c.cognome, telefono:c.telefono, telefono_prefisso:c.telefonoPrefisso||"+39", email:c.email, indirizzo:c.indirizzo, codice_fiscale:c.codiceFiscale, note:c.note }); },
-  async getRepairs() { const {data}=await supabase.from("repairs").select("*").eq("eliminata",false).order("created_at",{ascending:false}); return (data||[]).map(toRepair); },
+  async upsertCustomer(c) { const {error}=await supabase.from("customers").upsert({ id:c.id, nome:c.nome, cognome:c.cognome, telefono:c.telefono, telefono_prefisso:c.telefonoPrefisso||"+39", email:c.email, indirizzo:c.indirizzo, codice_fiscale:c.codiceFiscale, note:c.note }); _noteWriteErr(error); },
+  async getRepairs() { const {data,error}=await supabase.from("repairs").select("*").eq("eliminata",false).order("created_at",{ascending:false}); if(error)return {data:[],error}; return {data:(data||[]).map(toRepair),error:null}; },
   async getDeletedRepairs() { const {data}=await supabase.from("repairs").select("*").eq("eliminata",true).order("created_at",{ascending:false}); return (data||[]).map(toRepair); },
   async upsertRepair(r) {
     const clean=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
@@ -149,52 +157,52 @@ const api = {
     const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), marca:cs(r.marca), referenza:cs(r.referenza), nota_preventivo:cs(r.notaPreventivo), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null, in_garanzia:r.inGaranzia||false };
     const {error}=await supabase.from("repairs").upsert(payload);
     if(error){
-      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,...rest}=payload;await supabase.from("repairs").upsert(rest);}
-      else console.error("upsertRepair:",error);
+      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,...rest}=payload;const {error:e2}=await supabase.from("repairs").upsert(rest);_noteWriteErr(e2);}
+      else _noteWriteErr(error);
     }
   },
   async getNextRepairNum() { const {data}=await supabase.from("repairs").select("numero").order("created_at",{ascending:false}).limit(1); if(!data||!data.length) return repNum(1); const m=(data[0].numero||"").match(/\d{4}$/); return repNum(m?parseInt(m[0])+1:1); },
-  async softDeleteRepair(id) { await supabase.from("repairs").update({eliminata:true}).eq("id",id); },
+  async softDeleteRepair(id) { const {error}=await supabase.from("repairs").update({eliminata:true}).eq("id",id); _noteWriteErr(error); },
   async restoreRepair(id) { await supabase.from("repairs").update({eliminata:false}).eq("id",id); },
-  async updateRepairStatus(id,status) { await supabase.from("repairs").update({status}).eq("id",id); },
-  async updateRepairReturn(id,fields) { await supabase.from("repairs").update({ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }).eq("id",id); },
-  async getDDTs() { const {data}=await supabase.from("ddts").select("*").order("created_at",{ascending:false}); return (data||[]).map(toDDT); },
-  async upsertDDT(d) { await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, ddt_rientro_numero:d.ddtRientroNumero||null, note:d.note }); },
+  async updateRepairStatus(id,status) { const {error}=await supabase.from("repairs").update({status}).eq("id",id); _noteWriteErr(error); },
+  async updateRepairReturn(id,fields) { const {error}=await supabase.from("repairs").update({ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }).eq("id",id); _noteWriteErr(error); },
+  async getDDTs() { const {data,error}=await supabase.from("ddts").select("*").order("created_at",{ascending:false}); if(error)return {data:[],error}; return {data:(data||[]).map(toDDT),error:null}; },
+  async upsertDDT(d) { const {error}=await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, ddt_rientro_numero:d.ddtRientroNumero||null, note:d.note }); _noteWriteErr(error); },
   async createQuoteToken(repairId) { const token=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
-  async deleteDDT(id) { await supabase.from("ddts").delete().eq("id",id); },
-  async getRepairers() { const {data}=await supabase.from("repairers").select("*").order("nome"); return data||[]; },
+  async deleteDDT(id) { const {error}=await supabase.from("ddts").delete().eq("id",id); _noteWriteErr(error); },
+  async getRepairers() { const {data,error}=await supabase.from("repairers").select("*").order("nome"); if(error)return {data:[],error}; return {data:data||[],error:null}; },
   async upsertRepairer(r) {
     const {error}=await supabase.from("repairers").upsert(r);
     if(error&&error.code==="PGRST204"){
       const {citta:_c,provincia:_p,cap:_k,...rest}=r;
-      await supabase.from("repairers").upsert(rest);
-    }
+      const {error:e2}=await supabase.from("repairers").upsert(rest);_noteWriteErr(e2);
+    } else _noteWriteErr(error);
   },
-  async deleteRepairer(id) { await supabase.from("repairers").delete().eq("id",id); },
-  async deleteCustomer(id) { await supabase.from("customers").delete().eq("id",id); },
+  async deleteRepairer(id) { const {error}=await supabase.from("repairers").delete().eq("id",id); _noteWriteErr(error); },
+  async deleteCustomer(id) { const {error}=await supabase.from("customers").delete().eq("id",id); _noteWriteErr(error); },
   async mergeCustomers(primaryId, duplicateIds) {
     if(!primaryId||!duplicateIds?.length)return;
     for(const dup of duplicateIds){
       if(dup===primaryId)continue;
       const {error:eRep}=await supabase.from("repairs").update({customer_id:primaryId}).eq("customer_id",dup);
-      if(eRep)console.error("mergeCustomers repairs:",eRep);
+      _noteWriteErr(eRep);
       const {error:eOrd}=await supabase.from("orders").update({customer_id:primaryId}).eq("customer_id",dup);
-      if(eOrd)console.error("mergeCustomers orders:",eOrd);
+      _noteWriteErr(eOrd);
       const {error:eDel}=await supabase.from("customers").delete().eq("id",dup);
-      if(eDel)console.error("mergeCustomers delete:",eDel);
+      _noteWriteErr(eDel);
     }
   },
-  async getOrders() { const {data}=await supabase.from("orders").select("*").order("created_at",{ascending:false}); return (data||[]).map(toOrder); },
+  async getOrders() { const {data,error}=await supabase.from("orders").select("*").order("created_at",{ascending:false}); if(error)return {data:[],error}; return {data:(data||[]).map(toOrder),error:null}; },
   async upsertOrder(o) {
     const cleanNum=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
     const cs=(v)=>(v===""||v===undefined)?null:v;
     const payload={ id:o.id, numero:o.numero, customer_id:cs(o.customerId), data_ordine:cs(o.dataOrdine), data_consegna_prevista:cs(o.dataConsegnaPrevista), stato:o.stato||"ordinato", prodotti:o.prodotti||[], acconto:cleanNum(o.acconto), note:cs(o.note), foto_url:cs(o.fotoUrl), operatore:cs(o.operatore) };
     const {error}=await supabase.from("orders").upsert(payload);
-    if(error&&error.code==="PGRST204"){const {foto_url:_f,operatore:_op,...p2}=payload;const {error:e2}=await supabase.from("orders").upsert(p2);if(e2)console.error("upsertOrder:",e2);}
-    else if(error) console.error("upsertOrder:",error);
+    if(error&&error.code==="PGRST204"){const {foto_url:_f,operatore:_op,...p2}=payload;const {error:e2}=await supabase.from("orders").upsert(p2);_noteWriteErr(e2);}
+    else _noteWriteErr(error);
   },
-  async updateOrderStatus(id,stato) { await supabase.from("orders").update({stato}).eq("id",id); },
-  async deleteOrder(id) { await supabase.from("orders").delete().eq("id",id); },
+  async updateOrderStatus(id,stato) { const {error}=await supabase.from("orders").update({stato}).eq("id",id); _noteWriteErr(error); },
+  async deleteOrder(id) { const {error}=await supabase.from("orders").delete().eq("id",id); _noteWriteErr(error); },
   async getNextOrderNum() { const {data}=await supabase.from("orders").select("numero").order("created_at",{ascending:false}).limit(1); if(!data||!data.length) return ordNum(1); const m=(data[0].numero||"").match(/\d{4}$/); return ordNum(m?parseInt(m[0])+1:1); },
 };
 
@@ -1825,7 +1833,7 @@ function DDTPage({ddts,repairs,customers,onView,onNew}) {
   );
 }
 
-function SettingsPage({customers,repairs,ddts,repairers,onRestore,onSaveRepairer,onDeleteRepairer}) {
+function SettingsPage({customers,repairs,ddts,repairers,orders=[],onRestore,onSaveRepairer,onDeleteRepairer}) {
   const [deleted,setDeleted]=useState([]); const [showDeleted,setShowDeleted]=useState(false);
   const [showRepairers,setShowRepairers]=useState(false);
   const [restoring,setRestoring]=useState(false); const [msg,setMsg]=useState("");
@@ -1855,7 +1863,7 @@ function SettingsPage({customers,repairs,ddts,repairers,onRestore,onSaveRepairer
 
   const loadDeleted=async()=>{setDeleted(await api.getDeletedRepairs());setShowDeleted(true);};
   const doRestore=async(id)=>{await api.restoreRepair(id);setDeleted(d=>d.filter(r=>r.id!==id));};
-  const doExport=()=>{const bk={version:2,date:new Date().toISOString(),customers,repairs,ddts,repairers};const blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="gioielleria-backup-"+today()+".json";a.click();URL.revokeObjectURL(url);setMsg("✅ Backup esportato!");};
+  const doExport=()=>{const bk={version:2,date:new Date().toISOString(),customers,repairs,ddts,repairers,orders};const blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="gioielleria-backup-"+today()+".json";a.click();URL.revokeObjectURL(url);setMsg("✅ Backup esportato!");};
   const doImport=async(e)=>{const file=e.target.files?.[0];if(!file)return;setRestoring(true);setMsg("");try{const bk=JSON.parse(await file.text());if(!bk.customers||!bk.repairs)throw new Error("File non valido");await onRestore(bk);setMsg(`✅ Ripristino completato! ${bk.customers.length} clienti, ${bk.repairs.length} riparazioni.`);}catch(err){setMsg("❌ Errore: "+err.message);}setRestoring(false);};
 
   return (
@@ -3971,6 +3979,7 @@ function MainApp() {
   const [customers,setCustomers]=useState([]);const [repairs,setRepairs]=useState([]);
   const [ddts,setDdts]=useState([]);const [repairers,setRepairers]=useState([]);
   const [loading,setLoading]=useState(true);const [syncing,setSyncing]=useState(false);
+  const [syncErr,setSyncErr]=useState(false);const [dbError,setDbError]=useState(false);
   const [wizard,setWizard]=useState(false);
   const [customerForm,setCustomerForm]=useState(null);
   const [receiptModal,setReceiptModal]=useState(null);
@@ -3998,11 +4007,12 @@ function MainApp() {
     setNavFilter(filter); setTab("repairs");
   };
 
-  const loadCustomers=async()=>setCustomers(await api.getCustomers());
-  const loadRepairs=async()=>setRepairs(await api.getRepairs());
-  const loadDDTs=async()=>setDdts(await api.getDDTs());
-  const loadRepairers=async()=>setRepairers(await api.getRepairers());
-  const loadOrders=async()=>setOrders(await api.getOrders());
+  /* Su errore di lettura non svuota la lista in memoria: segnala dbError (banner). */
+  const loadCustomers=async()=>{const {data,error}=await api.getCustomers();if(error){setDbError(true);return;}setCustomers(data);setDbError(false);};
+  const loadRepairs=async()=>{const {data,error}=await api.getRepairs();if(error){setDbError(true);return;}setRepairs(data);setDbError(false);};
+  const loadDDTs=async()=>{const {data,error}=await api.getDDTs();if(error){setDbError(true);return;}setDdts(data);setDbError(false);};
+  const loadRepairers=async()=>{const {data,error}=await api.getRepairers();if(error){setDbError(true);return;}setRepairers(data);setDbError(false);};
+  const loadOrders=async()=>{const {data,error}=await api.getOrders();if(error){setDbError(true);return;}setOrders(data);setDbError(false);};
 
   useEffect(()=>{
     const loadAll=async()=>{await Promise.all([loadCustomers(),loadRepairs(),loadDDTs(),loadRepairers(),loadOrders()]);setLoading(false);};
@@ -4027,7 +4037,9 @@ function MainApp() {
     return()=>document.removeEventListener("visibilitychange",onVisible);
   },[]);
 
-  const withSync=async fn=>{setSyncing(true);try{await fn();}finally{setSyncing(false);}};
+  useEffect(()=>{if(!syncErr)return;const t=setTimeout(()=>setSyncErr(false),4000);return()=>clearTimeout(t);},[syncErr]);
+
+  const withSync=async fn=>{api._takeWriteError();setSyncing(true);try{await fn();}catch(e){_writeError=e;}finally{setSyncing(false);}if(api._takeWriteError())setSyncErr(true);};
   const getDDT=r=>ddts.find(d=>d.riparazioniIds?.includes(r.id));
   const openReceipt=(rep,preloadedCustomer)=>{
     if(!rep)return;
@@ -4162,7 +4174,7 @@ function MainApp() {
           const repConFin={...repUpd,prezzoFinale:fin??repUpd?.prezzoFinale};
           if(bulk){
             const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla sua riparazione n° ${repUpd.numero} è pronta per il ritiro.${fin?`\n\nImporto da saldare: ${fin} €`:""}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-            bulkMessages.push({telefono:custUpd.telefono,messaggio:msg});
+            bulkMessages.push({telefono:waPhone(custUpd),messaggio:msg});
           } else {
             setWaToast({repair:repConFin,customer:custUpd});
           }
@@ -4170,7 +4182,7 @@ function MainApp() {
         if(fi.nuovoStato==="reso_non_riparato"&&custUpd?.telefono){
           const causale=fi.causale?.trim()||"";
           const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla informiamo che la sua riparazione n° ${repUpd.numero} (${repUpd.descrizione}) ci è stata restituita senza essere riparata.${causale?`\n\nMotivo: ${causale}`:""}\n\nL'oggetto è disponibile per il ritiro.\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-          if(bulk) bulkMessages.push({telefono:custUpd.telefono,messaggio:msg});
+          if(bulk) bulkMessages.push({telefono:waPhone(custUpd),messaggio:msg});
           else setWaToast({repair:repUpd,customer:custUpd,customMsg:msg,label:"💬 Avvisa cliente"});
         }
       }
@@ -4245,7 +4257,7 @@ function MainApp() {
       const priceInfo=totProd>0?`\nImporto: ${totProd.toFixed(2)} €${accProd>0?`\nAcconto versato: ${accProd.toFixed(2)} €`:""}${rimProd>0?`\nRimanenza da pagare: ${rimProd.toFixed(2)} €`:""}`:""
       if(stato==="arrivato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.${priceInfo}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:c.telefono,messaggio:msg}]})})
+        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
           .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
           .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
       } else if(stato==="consegnato"){
@@ -4262,18 +4274,25 @@ function MainApp() {
   };
 
   const handleConsegnaOrder=async order=>{
-    const prodotti=order.prodotti.map(p=>({...p,stato:"consegnato"}));
-    const updated={...order,prodotti,stato:"consegnato"};
+    const consegnatiOra=order.prodotti.filter(p=>p.stato==="arrivato");
+    if(consegnatiOra.length===0)return;
+    const prodotti=order.prodotti.map(p=>p.stato==="arrivato"?{...p,stato:"consegnato"}:p);
+    const stato=prodotti.every(p=>p.stato==="consegnato")?"consegnato":
+      prodotti.some(p=>p.stato==="arrivato")?"arrivato":
+      prodotti.some(p=>p.stato==="ordinato")?"ordinato":"da_ordinare";
+    const updated={...order,prodotti,stato};
     await withSync(()=>api.upsertOrder(updated));
     setOrders(prev=>prev.map(o=>o.id===order.id?updated:o));
     if(viewOrder?.id===order.id)setViewOrder(updated);
     const c=customers.find(x=>x.id===order.customerId);
     if(c?.telefono){
-      const totOrd=prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
-      const totAcc=prodotti.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
+      const totOrd=consegnatiOra.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
+      const totAcc=consegnatiOra.reduce((a,p)=>a+(parseFloat(p.acconto)||0),0);
       const rimOrd=totOrd-totAcc;
-      const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
-      const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna dell'ordine n° ${order.numero}.${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
+      const totLines=totOrd>0?`\nImporto: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
+      const artLines=consegnatiOra.map(p=>`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`).join("\n");
+      const parziale=stato!=="consegnato";
+      const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna ${parziale?"parziale ":""}dell'ordine n° ${order.numero}:\n${artLines}${totLines}\n\nGrazie per aver scelto ${SHOP.nome}.`;
       setWaToast({repair:updated,customer:c,customMsg:msg,label:"📄 Conferma consegna"});
     }
   };
@@ -4359,11 +4378,19 @@ function MainApp() {
   };
 
   const handleRestore=async bk=>{
+    /* Il backup notturno salva righe snake_case; l'export in-app camelCase.
+       Normalizza via i convertitori toX quando la riga e' in forma DB. */
+    const snake=(r,keys)=>keys.some(k=>k in (r||{}));
+    const asCustomer=(r)=>snake(r,["telefono_prefisso","codice_fiscale"])?toCustomer(r):r;
+    const asRepair=(r)=>snake(r,["customer_id","tipo_lavoro","prezzo_finale","data_ricevuta"])?toRepair(r):r;
+    const asDDT=(r)=>snake(r,["riparazioni_ids","data_rientro","ddt_rientro_numero"])?toDDT(r):r;
+    const asOrder=(r)=>snake(r,["customer_id","data_ordine","data_consegna_prevista"])?toOrder(r):r;
     await withSync(async()=>{
-      for(const c of bk.customers||[])await api.upsertCustomer(c);
-      for(const r of bk.repairs||[])await api.upsertRepair(r);
-      for(const d of bk.ddts||[])await api.upsertDDT(d);
+      for(const c of bk.customers||[])await api.upsertCustomer(asCustomer(c));
+      for(const r of bk.repairs||[])await api.upsertRepair(asRepair(r));
+      for(const d of bk.ddts||[])await api.upsertDDT(asDDT(d));
       for(const r of bk.repairers||[])await api.upsertRepairer(r);
+      for(const o of bk.orders||[])await api.upsertOrder(asOrder(o));
     });
   };
 
@@ -4402,9 +4429,24 @@ function MainApp() {
       {tab==="customers"&&<CustomersPage customers={customers} repairs={repairs} onView={setViewCustomer} onNew={()=>setCustomerForm({})} onImport={()=>setImportContatti(true)} onDuplicates={()=>setShowDuplicates(true)}/>}
       {tab==="orders"&&<OrdersPage orders={orders} customers={customers} onView={setViewOrder} onNew={()=>setOrderForm({})} onConsegna={handleConsegnaOrder}/>}
       {tab==="ddt"&&<DDTPage ddts={ddts} repairs={repairs} customers={customers} onView={setViewDDT} onNew={()=>setDdtForm(true)}/>}
-      {tab==="settings"&&<SettingsPage customers={customers} repairs={repairs} ddts={ddts} repairers={repairers} onRestore={handleRestore} onSaveRepairer={handleSaveRepairer} onDeleteRepairer={handleDeleteRepairer}/>}
+      {tab==="settings"&&<SettingsPage customers={customers} repairs={repairs} ddts={ddts} repairers={repairers} orders={orders} onRestore={handleRestore} onSaveRepairer={handleSaveRepairer} onDeleteRepairer={handleDeleteRepairer}/>}
     </>
   );
+
+  const syncColor=(dbError||syncErr)?C.red:syncing?C.orange:C.green;
+  const syncText=dbError?"Connessione persa":syncErr?"Errore di salvataggio":syncing?"Salvataggio…":"Sincronizzato";
+  const DBBanner=dbError?(
+    <div style={{background:"#FEF2F2",borderBottom:"1px solid #FECACA",color:"#B91C1C",fontSize:13,fontWeight:600,padding:"10px 16px",textAlign:"center"}}>
+      ⚠️ Connessione al database persa — i dati mostrati potrebbero non essere aggiornati
+    </div>
+  ):null;
+  const ErrToast=syncErr?(
+    <div onClick={()=>setSyncErr(false)} style={{position:"fixed",bottom:isMD?24:96,left:"50%",transform:"translateX(-50%)",width:"calc(100% - 32px)",maxWidth:520,background:"#B91C1C",color:"white",borderRadius:14,padding:"12px 16px",zIndex:300,display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,.35)",fontFamily:"-apple-system,sans-serif",cursor:"pointer"}}>
+      <span style={{fontSize:20}}>⚠️</span>
+      <div style={{flex:1,fontSize:14,fontWeight:700}}>Salvataggio non riuscito — riprova</div>
+      <span style={{fontSize:16,opacity:.8}}>✕</span>
+    </div>
+  ):null;
 
   /* ── Layout MD+ (sidebar) ── */
   if(isMD) return (
@@ -4414,8 +4456,8 @@ function MainApp() {
         <div style={{padding:"18px 16px 14px",borderBottom:"1px solid rgba(0,0,0,.06)"}}>
           <img src={zerrilloLogo} alt="Zerrillo" style={{height:30,width:"auto",objectFit:"contain",marginBottom:8,display:"block"}}/>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <div style={{width:7,height:7,borderRadius:4,background:syncing?C.orange:C.green,transition:"background .3s",flexShrink:0}}/>
-            <div style={{fontSize:11,color:C.secondary}}>{syncing?"Salvataggio…":"Sincronizzato"}</div>
+            <div style={{width:7,height:7,borderRadius:4,background:syncColor,transition:"background .3s",flexShrink:0}}/>
+            <div style={{fontSize:11,color:dbError?C.red:C.secondary,fontWeight:dbError?700:400}}>{syncText}</div>
           </div>
         </div>
         <div style={{flex:1,padding:"10px 8px",overflowY:"auto"}}>
@@ -4435,11 +4477,13 @@ function MainApp() {
         <div style={{background:"rgba(242,242,247,.96)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(0,0,0,.08)",padding:"14px 24px 12px",flexShrink:0}}>
           <div style={{fontSize:22,fontWeight:800,color:C.label,letterSpacing:"-.5px"}}>{pageTitle}</div>
         </div>
+        {DBBanner}
         <div style={{flex:1,overflowY:"auto",padding:"20px 24px 40px"}}>
           {PAGES}
         </div>
       </div>
       {MODALS}
+      {ErrToast}
     </div>
   );
 
@@ -4453,14 +4497,15 @@ function MainApp() {
             <div>
               <div style={{fontSize:20,fontWeight:800,color:C.label,letterSpacing:"-.5px"}}>{pageTitle}</div>
               <div style={{display:"flex",alignItems:"center",gap:5}}>
-                <div style={{width:7,height:7,borderRadius:4,background:syncing?C.orange:C.green,transition:"background .3s"}}/>
-                <div style={{fontSize:11,color:C.secondary}}>{syncing?"Salvataggio…":"Sincronizzato"}</div>
+                <div style={{width:7,height:7,borderRadius:4,background:syncColor,transition:"background .3s"}}/>
+                <div style={{fontSize:11,color:dbError?C.red:C.secondary,fontWeight:dbError?700:400}}>{syncText}</div>
               </div>
             </div>
           </div>
           <button onClick={()=>setWizard(true)} style={{background:"linear-gradient(135deg,#C9A227,#B8860B)",border:"none",borderRadius:12,padding:"9px 18px",color:"white",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(184,134,11,.4)"}}>+ Riparazione</button>
         </div>
       </div>
+      {DBBanner}
       <div style={{padding:"16px 16px 100px"}}>
         {PAGES}
       </div>
@@ -4468,6 +4513,7 @@ function MainApp() {
         {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 0 10px",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}><span style={{fontSize:22,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:700,color:tab===t.id?"#B8860B":C.secondary}}>{t.l}</span></button>)}
       </div>
       {MODALS}
+      {ErrToast}
     </div>
   );
 }
