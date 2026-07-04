@@ -5,6 +5,21 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Repository — deliverable audit committati (04/07/2026)
+
+I documenti dell'audit e lo script di merge, finora non tracciati, sono ora versionati su
+`gestionale`: `AUDIT_REPORT.md`, `audit/FASE1-ANALISI.md`, `audit/FASE2-RISULTATI.md`,
+`audit/SESSIONE2-RILASCIO.md`, `audit/CHECKLIST-COME-ESEGUIRE.md`,
+`audit/HANDOFF-post-merge.md`, `audit/merge-sessione2.sh`, e il sorgente della edge
+function `supabase/functions/approve-quote/index.ts` (dismessa, tenuta come backup).
+`supabase/.temp/` escluso via `.gitignore`.
+
+- **Follow-up igiene repo** (non ancora fatto): `print-server/node_modules/` **non** è in
+  `.gitignore` ed è tracciato a metà (solo `.package-lock.json` versionato per errore →
+  "sporca" `git status`). Pulizia consigliata: aggiungere a `.gitignore`
+  `print-server/node_modules/`, `.claude/`, `print-server/.wwebjs_auth/`,
+  `print-server/.wwebjs_cache/`, poi `git rm -r --cached print-server/node_modules`.
+
 ### Hotfix stato ordine (04/07/2026) — WA su "CAMBIA STATO ORDINE" — deployato
 
 Segnalato in produzione subito dopo il go-live della Sessione 2: cambiando lo stato di
