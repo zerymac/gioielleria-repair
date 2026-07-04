@@ -16,6 +16,7 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
 const realtimeHandlers = []; // {table, cb}
 let autoEmit = true;
 let failSelects = false;
+let failWrites = false;
 
 function emitTable(table, payload = {}) {
   realtimeHandlers
@@ -70,6 +71,9 @@ class Query {
       if (this._single) return { data: out[0] || null, error: out[0] ? null : { message: "no rows", code: "PGRST116" } };
       if (this._maybe)  return { data: out[0] || null, error: null };
       return { data: out, error: null };
+    }
+    if (this._op !== "select" && failWrites) {
+      return { data: null, error: { message: "scrittura fallita (audit)", code: "AUDIT_WRITE" } };
     }
     if (this._op === "upsert") {
       const items = Array.isArray(this._payload) ? this._payload : [this._payload];
@@ -133,7 +137,7 @@ const __fake = {
     for (const k of Object.keys(db)) db[k] = [];
     realtimeHandlers.length = 0;
     channels.length = 0;
-    autoEmit = true; failSelects = false;
+    autoEmit = true; failSelects = false; failWrites = false;
   },
   seed(table, rowsArr) {
     for (const r of rowsArr) (db[table] || (db[table] = [])).push({ created_at: nextTs(), ...clone(r) });
@@ -141,6 +145,7 @@ const __fake = {
   emitTable,
   setAutoEmit(v) { autoEmit = v; },
   setFailSelects(v) { failSelects = v; },
+  setFailWrites(v) { failWrites = v; },
   realtimeHandlers,
 };
 

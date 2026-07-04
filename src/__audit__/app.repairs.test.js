@@ -125,13 +125,11 @@ test("A9 — cambio stato a 'consegnato' imposta data_consegnata", async () => {
   expect(__fake.db.repairs[0].data_consegnata).toBe(new Date().toISOString().split("T")[0]);
 });
 
-test("Resilienza — Supabase irraggiungibile all'avvio: l'app resta su 'Caricamento…' senza messaggio di errore", async () => {
+test("FIX C3 — Supabase irraggiungibile all'avvio: l'app avvisa con il banner di connessione persa", async () => {
   __fake.setFailSelects(true);
   render(<App />);
   fireEvent.change(screen.getByPlaceholderText("PIN di accesso"), { target: { value: "1234" } });
   fireEvent.click(screen.getByText("Entra"));
-  await new Promise((r) => setTimeout(r, 400));
-  // getRepairs & co. restituiscono {data:null} → (data||[]) → l'app carica vuota senza avvisare
-  // NB: qui documentiamo che NON esiste alcuna UI di errore.
-  expect(screen.queryByText(/errore/i)).toBeNull();
+  // ora il degrado offline e' segnalato, non silenzioso
+  await screen.findByText(/aggiornati/);
 });
