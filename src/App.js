@@ -3395,6 +3395,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
   const [step,setStep]=useState(isEdit?6:0);
   const [form,setForm]=useState({
     id:order?.id||uid(),
+    numero:order?.numero||"",
     customerId:order?.customerId||"",
     dataOrdine:order?.dataOrdine||today(),
     operatore:order?.operatore||"",
@@ -3455,15 +3456,16 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
 
   const addCurrentProduct=()=>{
     const prod=buildCurrentProd();
-    if(!prod)return;
-    setForm(f=>({...f,
-      prodotti:[...f.prodotti,prod],
-      categoria:"",descrizione:"",fornitore:"",marca:"",referenza:"",
-      quantita:1,prezzoVendita:"",prezzoAcquisto:"",acconto:"",
-      dataConsegnaPrevista:"",notaProdotto:"",statoProdotto:"da_ordinare",
-      fotoUrl:null,fotoBlob:null,
-    }));
-    setImgPreview(null);
+    if(prod){
+      setForm(f=>({...f,
+        prodotti:[...f.prodotti,prod],
+        categoria:"",descrizione:"",fornitore:"",marca:"",referenza:"",
+        quantita:1,prezzoVendita:"",prezzoAcquisto:"",acconto:"",
+        dataConsegnaPrevista:"",notaProdotto:"",statoProdotto:"da_ordinare",
+        fotoUrl:null,fotoBlob:null,
+      }));
+      setImgPreview(null);
+    }
     setStep(2);
   };
 
@@ -4232,6 +4234,7 @@ function MainApp() {
     const id=form.id;
     const saved={...form,numero};
     await withSync(()=>api.upsertOrder(saved));
+    setOrders(prev=>prev.some(o=>o.id===id)?prev.map(o=>o.id===id?saved:o):[saved,...prev]);
     setOrderForm(null);
     if(viewOrder?.id===id)setViewOrder(saved);
     const c=customers.find(x=>x.id===saved.customerId);
