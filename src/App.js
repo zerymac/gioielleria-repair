@@ -174,7 +174,7 @@ const api = {
   async upsertRepairer(r) {
     const {error}=await supabase.from("repairers").upsert(r);
     if(error&&error.code==="PGRST204"){
-      const {citta:_c,provincia:_p,cap:_k,...rest}=r;
+      const {citta:_c,provincia:_p,cap:_k,email:_e,...rest}=r;
       const {error:e2}=await supabase.from("repairers").upsert(rest);_noteWriteErr(e2);
     } else _noteWriteErr(error);
   },
@@ -3239,6 +3239,7 @@ function RepairerEditForm({form,rId,isNew,confirmDel,setF,cancelEdit,onSave,onDe
         <IOSInput placeholder="P.IVA" value={form?.piva||""} onChange={e=>setF("piva",e.target.value)}/>
         <IOSInput placeholder="Telefono" value={form?.telefono||""} onChange={e=>setF("telefono",e.target.value)}/>
       </div>
+      <IOSInput placeholder="Email" type="email" value={form?.email||""} onChange={e=>setF("email",e.target.value)}/>
       <div style={{display:"flex",gap:8}}>
         <Btn label="Annulla" variant="secondary" full onClick={cancelEdit}/>
         <Btn label="💾 Salva" full disabled={!form?.nome} onClick={()=>{onSave(form);cancelEdit();}}/>
