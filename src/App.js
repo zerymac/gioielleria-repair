@@ -1987,20 +1987,27 @@ function OrderReceiptModal({order,customer:c,onClose}) {
   );
 }
 
-function ReceiptModal({repair:r,customer:c,onClose}) {
-  const msg=`Gentile ${c.nome} ${c.cognome},\nRicevuta n° ${r.numero}\nOggetto: ${r.descrizione}\n${r.problema?"Lavoro: "+r.problema+"\n":""}Consegna prevista: ${fmtDate(r.dataConsegna)||"da definire"}\nPreventivo: ${r.preventivo?r.preventivo+" €":"da definire"}\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+function ReceiptModal({repair:r,customer:c,allRepairs,onClose}) {
+  const reps=allRepairs&&allRepairs.length?allRepairs:[r];
+  const multi=reps.length>1;
+  const prevTot=reps.reduce((s,x)=>s+(parseFloat(x.preventivo)||0),0);
+  const msg=multi
+    ? `Gentile ${c.nome} ${c.cognome},\nAbbiamo ricevuto i suoi ${reps.length} oggetti in riparazione:\n${reps.map((x,i)=>`${i+1}) n° ${x.numero} — ${x.descrizione}`).join("\n")}\nConsegna prevista: ${fmtDate(r.dataConsegna)||"da definire"}\nPreventivo totale: ${prevTot>0?prevTot.toFixed(2)+" €":"da definire"}\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`
+    : `Gentile ${c.nome} ${c.cognome},\nRicevuta n° ${r.numero}\nOggetto: ${r.descrizione}\n${r.problema?"Lavoro: "+r.problema+"\n":""}Consegna prevista: ${fmtDate(r.dataConsegna)||"da definire"}\nPreventivo: ${r.preventivo?r.preventivo+" €":"da definire"}\n\nGrazie per la fiducia!\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
   const doPrint=()=>{
-    try{smartPrint(receiptHTML(r,c));}
+    try{smartPrint(multi?multiReceiptHTML(reps,c):receiptHTML(r,c));}
     catch(e){console.error("doPrint:",e);alert("Errore stampa: "+e.message);}
   };
   const doWA=()=>{const p=fullPhone(c);if(p)window.open("https://wa.me/"+p+"?text="+encodeURIComponent(msg),"_blank");};
   const doEmail=()=>window.open("mailto:"+c.email+"?subject="+encodeURIComponent("Ricevuta "+r.numero)+"&body="+encodeURIComponent(msg));
   const doSMS=()=>{const p=fullPhone(c);if(p)window.open("sms:+"+p+"?body="+encodeURIComponent(msg));};
   return (
-    <Sheet onClose={onClose} title={"Etichette "+r.numero}>
-      {r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:14,marginBottom:12}}/>}
+    <Sheet onClose={onClose} title={multi?`Etichette · ${reps.length} oggetti`:"Etichette "+r.numero}>
+      {!multi&&r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:14,marginBottom:12}}/>}
       <IOSCard style={{marginBottom:16}}>
-        {[["N° Ricevuta",r.numero],["Cliente",c.nome+" "+c.cognome],["Oggetto",r.descrizione],r.tipoLavoro?["Lavoro",r.tipoLavoro]:null,r.mano?["Anello","Mano "+r.mano+" · "+r.dito]:null,["Data ricevuta",fmtDate(r.dataRicevuta)],["Consegna",fmtDate(r.dataConsegna)||"—"],["Preventivo",(r.preventivo?r.preventivo+" €":"Da definire")+(r.preventivoAccettato?" ✅":"")],r.richiestaPreventivo?["Prev. richiesto","⏳ Sì"]:null].filter(Boolean).map(([l,v],i,arr)=><IOSRow key={l} label={l} value={v} last={i===arr.length-1}/>)}
+        {multi
+          ? [["Cliente",c.nome+" "+c.cognome],["Oggetti",reps.length+" in riparazione"],["Ricevute",reps.map(x=>x.numero).join(", ")],["Data ricevuta",fmtDate(r.dataRicevuta)],["Consegna",fmtDate(r.dataConsegna)||"—"],prevTot>0?["Preventivo totale",prevTot.toFixed(2)+" €"]:null].filter(Boolean).map(([l,v],i,arr)=><IOSRow key={l} label={l} value={v} last={i===arr.length-1}/>)
+          : [["N° Ricevuta",r.numero],["Cliente",c.nome+" "+c.cognome],["Oggetto",r.descrizione],r.tipoLavoro?["Lavoro",r.tipoLavoro]:null,r.mano?["Anello","Mano "+r.mano+" · "+r.dito]:null,["Data ricevuta",fmtDate(r.dataRicevuta)],["Consegna",fmtDate(r.dataConsegna)||"—"],["Preventivo",(r.preventivo?r.preventivo+" €":"Da definire")+(r.preventivoAccettato?" ✅":"")],r.richiestaPreventivo?["Prev. richiesto","⏳ Sì"]:null].filter(Boolean).map(([l,v],i,arr)=><IOSRow key={l} label={l} value={v} last={i===arr.length-1}/>)}
       </IOSCard>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
         <button onClick={doPrint} style={{background:"linear-gradient(135deg,#C9A227,#B8860B)",border:"none",borderRadius:18,padding:"18px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><span style={{fontSize:34}}>🖨️</span><span style={{fontSize:15,fontWeight:700,color:"white"}}>Stampa etichette</span></button>
@@ -4339,13 +4346,7 @@ function MainApp() {
     setSyncing(false);
     setWizard(false);
     if(c&&savedRepairs.length>0){
-      if(savedRepairs.length===1){
-        /* Singolo oggetto → apre il modal etichette normalmente */
-        setReceiptModal({repair:savedRepairs[0],customer:c});
-      } else {
-        /* Multi-oggetto → apre il modal etichette per il primo oggetto */
-        setReceiptModal({repair:savedRepairs[0],customer:c});
-      }
+      setReceiptModal({repair:savedRepairs[0],customer:c,allRepairs:savedRepairs});
     }
   };
 
