@@ -3319,8 +3319,9 @@ function OrderCard({order,customers,onView,onConsegna}) {
         {c&&<div style={{fontSize:14,color:C.label,marginBottom:4}}>{c.nome} {c.cognome}</div>}
         {order.prodotti.length>0&&<div style={{marginBottom:4}}>
           {order.prodotti.slice(0,3).map((p,i)=>(
-            <div key={i} style={{fontSize:13,color:C.label,lineHeight:1.4}}>
-              {p.quantita>1?`${p.quantita}× `:""}{p.descrizione}{p.marca?<span style={{color:C.secondary}}> · {p.marca}</span>:null}
+            <div key={i} style={{lineHeight:1.4,marginBottom:2}}>
+              <div style={{fontSize:13,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}{p.marca?<span style={{color:C.secondary}}> · {p.marca}</span>:null}</div>
+              {(p.fornitore||p.dataOrdineFornitore||p.dataConsegnaPrevista)&&<div style={{fontSize:11,color:"#B8860B",fontWeight:600}}>📦 {[p.fornitore,p.dataOrdineFornitore?`ord. ${fmtDate(p.dataOrdineFornitore)}`:null,p.dataConsegnaPrevista?`arrivo ${fmtDate(p.dataConsegnaPrevista)}`:null].filter(Boolean).join(" · ")}</div>}
             </div>
           ))}
           {order.prodotti.length>3&&<div style={{fontSize:12,color:C.secondary}}>+{order.prodotti.length-3} altri</div>}
@@ -3418,6 +3419,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
     prezzoVendita:"",
     prezzoAcquisto:"",
     acconto:"",
+    dataOrdineFornitore:"",
     dataConsegnaPrevista:"",
     notaProdotto:"",
     statoProdotto:"da_ordinare",
@@ -3456,6 +3458,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
     prezzoVendita:parseFloat(form.prezzoVendita)||null,
     prezzoAcquisto:parseFloat(form.prezzoAcquisto)||null,
     acconto:parseFloat(form.acconto)||null,
+    dataOrdineFornitore:form.dataOrdineFornitore||null,
     dataConsegnaPrevista:form.dataConsegnaPrevista||null,
     note:form.notaProdotto||null,
     stato:form.statoProdotto||"da_ordinare",
@@ -3469,7 +3472,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
         prodotti:[...f.prodotti,prod],
         categoria:"",descrizione:"",fornitore:"",marca:"",referenza:"",
         quantita:1,prezzoVendita:"",prezzoAcquisto:"",acconto:"",
-        dataConsegnaPrevista:"",notaProdotto:"",statoProdotto:"da_ordinare",
+        dataOrdineFornitore:"",dataConsegnaPrevista:"",notaProdotto:"",statoProdotto:"da_ordinare",
         fotoUrl:null,fotoBlob:null,
       }));
       setImgPreview(null);
@@ -3627,7 +3630,14 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <IOSInput label="Data ordine" type="date" value={form.dataOrdine||today()} onChange={e=>set("dataOrdine",e.target.value)}/>
-            <IOSInput label="Consegna prevista" type="date" value={form.dataConsegnaPrevista||""} onChange={e=>set("dataConsegnaPrevista",e.target.value)}/>
+            <IOSInput label="Arrivo / consegna previsto" type="date" value={form.dataConsegnaPrevista||""} onChange={e=>set("dataConsegnaPrevista",e.target.value)}/>
+          </div>
+          <div style={{background:"#FDF6DC",borderRadius:14,padding:14,border:"1px solid #F0E2B8"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#B8860B",marginBottom:10}}>📦 ORDINE AL FORNITORE</div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <IOSInput label="Ordinato a" placeholder="Es. Comete, grossista…" value={form.fornitore||""} onChange={e=>set("fornitore",e.target.value)}/>
+              <IOSInput label="Data ordine al fornitore" type="date" value={form.dataOrdineFornitore||""} onChange={e=>set("dataOrdineFornitore",e.target.value)}/>
+            </div>
           </div>
           <div>
             <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:8}}>STATO ARTICOLO</div>
@@ -3673,6 +3683,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
                   {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:12,color:C.secondary}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:2}}>
                     {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
+                    {p.dataOrdineFornitore&&<span style={{fontSize:12,color:"#B8860B",fontWeight:600}}>📦 {fmtDate(p.dataOrdineFornitore)}</span>}
                     {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(p.dataConsegnaPrevista)}</span>}
                     {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
                   </div>
@@ -3693,6 +3704,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
               {(form.marca||form.referenza)&&<div style={{fontSize:12,color:C.secondary}}>{[form.marca,form.referenza].filter(Boolean).join(" · ")}</div>}
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
                 {form.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {form.prezzoVendita} €</span>}
+                {form.dataOrdineFornitore&&<span style={{fontSize:12,color:"#B8860B",fontWeight:600}}>📦 {fmtDate(form.dataOrdineFornitore)}</span>}
                 {form.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(form.dataConsegnaPrevista)}</span>}
                 {form.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {form.acconto} €</span>}
                 <span style={{background:ORDER_STATUSES[form.statoProdotto]?.bg,color:ORDER_STATUSES[form.statoProdotto]?.color,fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:10}}>{ORDER_STATUSES[form.statoProdotto]?.label}</span>
@@ -3716,10 +3728,14 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
   );
 }
 
-function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onPrint,onProductStatus,onConsegna}) {
+function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onPrint,onProductStatus,onProductPatch,onConsegna}) {
   const c=customers.find(x=>x.id===order.customerId);
   const [confirmDel,setConfirmDel]=useState(false);
   const [expandedProd,setExpandedProd]=useState(null);
+  const [editProd,setEditProd]=useState(null);
+  const [editVals,setEditVals]=useState({});
+  const openEdit=(p)=>{setEditVals({fornitore:p.fornitore||"",dataOrdineFornitore:p.dataOrdineFornitore||"",dataConsegnaPrevista:p.dataConsegnaPrevista||""});setEditProd(p.id);};
+  const saveEdit=(pid)=>{onProductPatch&&onProductPatch(order.id,pid,{fornitore:editVals.fornitore||null,dataOrdineFornitore:editVals.dataOrdineFornitore||null,dataConsegnaPrevista:editVals.dataConsegnaPrevista||null});setEditProd(null);};
   const s=ORDER_STATUSES[order.stato]||ORDER_STATUSES.ordinato;
   const totVendita=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoVendita)||0)*(parseInt(p.quantita)||1),0);
   const totAcquisto=order.prodotti.reduce((a,p)=>a+(parseFloat(p.prezzoAcquisto)||0)*(parseInt(p.quantita)||1),0);
@@ -3771,8 +3787,12 @@ function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onP
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:15,fontWeight:700,color:C.label}}>{p.quantita>1?`${p.quantita}× `:""}{p.descrizione}</div>
-                    {[p.categoria,p.fornitore].filter(Boolean).length>0&&<div style={{fontSize:13,color:C.secondary,marginTop:1}}>{[p.categoria,p.fornitore].filter(Boolean).join(" · ")}</div>}
+                    {p.categoria&&<div style={{fontSize:13,color:C.secondary,marginTop:1}}>{p.categoria}</div>}
                     {(p.marca||p.referenza)&&<div style={{fontSize:12,color:C.secondary}}>{[p.marca,p.referenza].filter(Boolean).join(" · ")}</div>}
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+                      <div style={{fontSize:12,color:(p.fornitore||p.dataOrdineFornitore)?"#B8860B":C.secondary,fontWeight:600}}>📦 {(p.fornitore||p.dataOrdineFornitore)?[p.fornitore?`Ordinato a ${p.fornitore}`:"Ordinato",p.dataOrdineFornitore?`il ${fmtDate(p.dataOrdineFornitore)}`:""].filter(Boolean).join(" "):"Fornitore non indicato"}</div>
+                      {onProductPatch&&<button onClick={()=>openEdit(p)} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"3px 7px",color:"#B8860B",fontSize:12,cursor:"pointer",flexShrink:0}}>✏️</button>}
+                    </div>
                     {p.note&&<div style={{fontSize:12,color:C.secondary,fontStyle:"italic",marginTop:2}}>{p.note}</div>}
                     <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
                       {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
@@ -3787,6 +3807,22 @@ function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onP
                     {Object.entries(ORDER_STATUSES).map(([k,v])=>(
                       <button key={k} onClick={()=>{onProductStatus(order.id,p.id,k);setExpandedProd(null);}} style={{padding:"5px 12px",borderRadius:20,border:`2px solid ${p.stato===k?v.color:"transparent"}`,background:p.stato===k?v.bg:"#E5E5EA",color:p.stato===k?v.color:C.label,fontSize:12,fontWeight:700,cursor:"pointer"}}>{v.label}</button>
                     ))}
+                  </div>
+                )}
+                {editProd===p.id&&(
+                  <div style={{marginTop:10,background:"#FDF6DC",borderRadius:12,padding:12,border:"1px solid #F0E2B8"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#B8860B",marginBottom:10}}>📦 ORDINE AL FORNITORE</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <IOSInput label="Ordinato a" placeholder="Es. Comete, grossista…" value={editVals.fornitore} onChange={e=>setEditVals(v=>({...v,fornitore:e.target.value}))}/>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <IOSInput label="Data ordine" type="date" value={editVals.dataOrdineFornitore} onChange={e=>setEditVals(v=>({...v,dataOrdineFornitore:e.target.value}))}/>
+                        <IOSInput label="Arrivo previsto" type="date" value={editVals.dataConsegnaPrevista} onChange={e=>setEditVals(v=>({...v,dataConsegnaPrevista:e.target.value}))}/>
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <Btn label="Annulla" variant="secondary" full onClick={()=>setEditProd(null)}/>
+                        <Btn label="💾 Salva" full onClick={()=>saveEdit(p.id)}/>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -4278,6 +4314,16 @@ function MainApp() {
     }
   };
 
+  const handleOrderProductPatch=async(orderId,prodId,patch)=>{
+    const ord=(viewOrder?.id===orderId?viewOrder:orders.find(o=>o.id===orderId));if(!ord)return;
+    const prodotti=ord.prodotti.map(p=>p.id===prodId?{...p,...patch}:p);
+    const dataConsegnaPrevista=prodotti.map(p=>p.dataConsegnaPrevista).filter(Boolean).sort()[0]||null;
+    const updated={...ord,prodotti,dataConsegnaPrevista};
+    await withSync(()=>api.upsertOrder(updated));
+    setOrders(prev=>prev.map(o=>o.id===orderId?updated:o));
+    if(viewOrder?.id===orderId)setViewOrder(updated);
+  };
+
   const handleOrderStatus=async(id,stato)=>{
     const ord=(viewOrder?.id===id?viewOrder:orders.find(o=>o.id===id));if(!ord)return;
     const prodotti=ord.prodotti.map(p=>({...p,stato}));
@@ -4422,7 +4468,7 @@ function MainApp() {
   const MODALS=(
     <>
       {orderForm!==null&&<OrderForm order={orderForm.id?orderForm:null} customers={customers} repairs={repairs} orders={orders} onSave={handleSaveOrder} onClose={()=>setOrderForm(null)} onAddedCustomer={handleWizardAddCustomer}/>}
-      {viewOrder&&<OrderDetail order={viewOrder} customers={customers} onClose={()=>setViewOrder(null)} onEdit={()=>{setOrderForm(viewOrder);setViewOrder(null);}} onStatusChange={handleOrderStatus} onDelete={handleDeleteOrder} onPrint={()=>setOrderReceipt({order:viewOrder,customer:customers.find(c=>c.id===viewOrder.customerId)||null})} onProductStatus={handleOrderProductStatus} onConsegna={handleConsegnaOrder}/>}
+      {viewOrder&&<OrderDetail order={viewOrder} customers={customers} onClose={()=>setViewOrder(null)} onEdit={()=>{setOrderForm(viewOrder);setViewOrder(null);}} onStatusChange={handleOrderStatus} onDelete={handleDeleteOrder} onPrint={()=>setOrderReceipt({order:viewOrder,customer:customers.find(c=>c.id===viewOrder.customerId)||null})} onProductStatus={handleOrderProductStatus} onProductPatch={handleOrderProductPatch} onConsegna={handleConsegnaOrder}/>}
       {orderReceipt&&<OrderReceiptModal order={orderReceipt.order} customer={orderReceipt.customer} onClose={()=>setOrderReceipt(null)}/>}
       {importContatti&&<ImportContatti customers={customers} onImport={handleImportContatti} onClose={()=>setImportContatti(false)}/>}
       {showDuplicates&&<DuplicatesModal customers={customers} repairs={repairs} orders={orders} onMerge={handleMergeCustomers} onClose={()=>{setShowDuplicates(false);loadCustomers();loadRepairs();loadOrders();}}/>}
