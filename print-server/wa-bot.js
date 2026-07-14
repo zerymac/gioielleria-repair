@@ -16,6 +16,7 @@ const waDeclineSent = new Set();
 let waClient        = null;
 let waReady         = false;
 let realtimeStarted = false;
+let reconcileTimer = null;
 
 /* ── Delay casuale per evitare rilevamento spam da WhatsApp ── */
 const waDelay = () => new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
@@ -279,11 +280,21 @@ async function startRealtimeSubscription(supabase) {
     })
     .subscribe(status => {
       if (status === 'SUBSCRIBED') console.log('📡 Supabase Realtime attivo — in ascolto preventivi');
+      else console.warn(`⚠️  Realtime status: ${status} — riconciliazione periodica come rete di sicurezza`);
     });
 
   /* Reconciliation: preventivi accettati/rifiutati mentre il bot era down.
      Query per accettato_true + wa_accept_sent_at IS NULL → li processa uno a uno. */
   await reconcilePending(supabase);
+
+  /* Rete di sicurezza: il WebSocket Realtime può cadere in silenzio senza riconnettersi
+     (eventi persi finché non si riavvia). Ogni 5 min ri-scansiona i pendenti e li recupera.
+     handleAccepted/handleDeclined sono idempotenti (Set waSent + wa_*_sent_at), niente doppioni. */
+  if (!reconcileTimer) {
+    reconcileTimer = setInterval(() => {
+      reconcilePending(supabase).catch(e => console.warn('⚠️  Reconcile periodico fallito:', e.message));
+    }, 5 * 60 * 1000);
+  }
 }
 
 async function reconcilePending(supabase) {
