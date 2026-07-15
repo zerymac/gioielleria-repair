@@ -123,7 +123,7 @@ const C = {
 
 /* ── API ── */
 const toCustomer = (r) => ({ id:r.id, nome:r.nome, cognome:r.cognome, telefono:r.telefono, telefonoPrefisso:r.telefono_prefisso||"+39", email:r.email, indirizzo:r.indirizzo, codiceFiscale:r.codice_fiscale, note:r.note });
-const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, marca:r.marca||null, referenza:r.referenza||null, notaPreventivo:r.nota_preventivo||null, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null, inGaranzia:r.in_garanzia||false });
+const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, marca:r.marca||null, referenza:r.referenza||null, notaPreventivo:r.nota_preventivo||null, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, preventivoRifiutato:r.preventivo_rifiutato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null, inGaranzia:r.in_garanzia||false, ddtFornitore:r.ddt_fornitore||null });
 const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, ddtRientroNumero:r.ddt_rientro_numero||null, note:r.note });
 const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, operatore:r.operatore||null, createdAt:r.created_at });
 
@@ -154,10 +154,10 @@ const api = {
   async upsertRepair(r) {
     const clean=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
     const cs=(v)=>(v===""||v===undefined)?null:v;
-    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), marca:cs(r.marca), referenza:cs(r.referenza), nota_preventivo:cs(r.notaPreventivo), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null, in_garanzia:r.inGaranzia||false };
+    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), marca:cs(r.marca), referenza:cs(r.referenza), nota_preventivo:cs(r.notaPreventivo), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null, in_garanzia:r.inGaranzia||false, ddt_fornitore:cs(r.ddtFornitore) };
     const {error}=await supabase.from("repairs").upsert(payload);
     if(error){
-      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,...rest}=payload;const {error:e2}=await supabase.from("repairs").upsert(rest);_noteWriteErr(e2);}
+      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,ddt_fornitore:_df,...rest}=payload;const {error:e2}=await supabase.from("repairs").upsert(rest);_noteWriteErr(e2);}
       else _noteWriteErr(error);
     }
   },
@@ -1607,6 +1607,9 @@ function RepairsPage({repairs,customers,ddts,onView,onReceipt,onNew,onScan,navFi
     let matchF=true;
     if(fs==="__active__") matchF=r.status!=="consegnato";
     else if(fs==="__overdue__") matchF=r.status!=="consegnato"&&r.status!=="pronto"&&r.dataConsegna&&r.dataConsegna<today();
+    else if(fs==="__prev__") matchF=!!r.richiestaPreventivo;
+    else if(fs==="__prev_acc__") matchF=!!r.preventivoAccettato;
+    else if(fs==="__prev_rif__") matchF=!!r.preventivoRifiutato;
     else if(fs) matchF=r.status===fs;
     return matchQ&&matchF;
   }).sort((a,b)=>(b.dataRicevuta||"").localeCompare(a.dataRicevuta||""));
@@ -1621,6 +1624,9 @@ function RepairsPage({repairs,customers,ddts,onView,onReceipt,onNew,onScan,navFi
           <option value="">Tutti</option>
           <option value="__active__">🔧 Attive</option>
           <option value="__overdue__">⚠️ In ritardo</option>
+          <option value="__prev__">🧾 Con preventivo</option>
+          <option value="__prev_acc__">✅ Prev. accettato</option>
+          <option value="__prev_rif__">❌ Prev. rifiutato</option>
           {Object.entries(STATUSES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
         </select>
       </div>
@@ -1762,7 +1768,92 @@ function CustomersPage({customers,repairs,onView,onNew,onImport,onDuplicates}) {
   );
 }
 
-function DDTPage({ddts,repairs,customers,onView,onNew}) {
+function CostiDDTFornitore({repairs,customers,onRepairPatch,onClose}) {
+  const [q,setQ]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [numInput,setNumInput]=useState("");
+  const [spesaInput,setSpesaInput]=useState("");
+  const openEdit=(r)=>{setNumInput(r.ddtFornitore||"");setSpesaInput(r.spesa!=null?String(r.spesa):"");setEditId(r.id);};
+  const save=(id)=>{onRepairPatch&&onRepairPatch(id,{ddtFornitore:numInput.trim()||null,spesa:spesaInput===""?null:parseFloat(spesaInput)||null});setEditId(null);};
+  const custName=(r)=>{const c=customers.find(x=>x.id===r.customerId);return c?`${c.nome} ${c.cognome}`:"";};
+  const s=q.trim().toLowerCase();
+  const matchR=(r)=>!s||r.numero.toLowerCase().includes(s)||(r.descrizione||"").toLowerCase().includes(s)||custName(r).toLowerCase().includes(s)||(r.ddtFornitore||"").toLowerCase().includes(s);
+
+  const assigned=repairs.filter(r=>r.ddtFornitore&&!r.eliminata);
+  const groups={};
+  assigned.forEach(r=>{(groups[r.ddtFornitore]=groups[r.ddtFornitore]||[]).push(r);});
+  const groupKeys=Object.keys(groups).filter(k=>!s||k.toLowerCase().includes(s)||groups[k].some(matchR)).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const unassigned=s?repairs.filter(r=>!r.ddtFornitore&&!r.eliminata&&matchR(r)):[];
+  const grandTot=assigned.reduce((a,r)=>a+(parseFloat(r.spesa)||0),0);
+
+  const editor=(r)=>(
+    <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <IOSInput label="🧾 N° DDT fornitore" placeholder="es. 42" value={numInput} onChange={e=>setNumInput(e.target.value)} autoFocus/>
+        <IOSInput label="💰 Spesa (€)" type="number" step="0.01" placeholder="0.00" value={spesaInput} onChange={e=>setSpesaInput(e.target.value)}/>
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <Btn label="Annulla" variant="secondary" small onClick={()=>setEditId(null)}/>
+        <Btn label="💾 Salva" small onClick={()=>save(r.id)}/>
+      </div>
+    </div>
+  );
+  const row=(r)=>(
+    <div key={r.id} style={{padding:"10px 14px",borderTop:"1px solid #F2F2F7"}}>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.label}}>{r.numero} <span style={{fontWeight:500,color:C.secondary}}>· {custName(r)}</span></div>
+          <div style={{fontSize:12,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descrizione}</div>
+        </div>
+        <div style={{fontSize:13,fontWeight:700,color:r.spesa!=null?"#E11D48":C.secondary,flexShrink:0}}>{r.spesa!=null?parseFloat(r.spesa).toFixed(2)+" €":"—"}</div>
+        {editId!==r.id&&<button onClick={()=>openEdit(r)} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:12,cursor:"pointer",flexShrink:0}}>✏️</button>}
+      </div>
+      {editId===r.id&&editor(r)}
+    </div>
+  );
+
+  return (
+    <Sheet onClose={onClose} title="Costi DDT fornitore">
+      <div style={{fontSize:13,color:C.secondary,marginBottom:12}}>Le riparazioni sono raggruppate per n° DDT del fornitore. Confronta ogni totale con la sua fattura. Cerca una riparazione per assegnarle un n° DDT e la spesa.</div>
+      <input style={{width:"100%",background:C.white,border:"none",borderRadius:12,padding:"10px 14px",fontSize:15,fontFamily:"-apple-system,sans-serif",boxShadow:"0 1px 3px rgba(0,0,0,.07)",outline:"none",marginBottom:14,boxSizing:"border-box"}} placeholder="🔍  Cerca n° DDT, riparazione o cliente…" value={q} onChange={e=>setQ(e.target.value)}/>
+
+      {assigned.length>0&&<div style={{background:"#FFF1F2",borderRadius:14,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:13,fontWeight:700,color:"#E11D48"}}>Totale spese ({groupKeys.length} DDT fornitore)</span>
+        <span style={{fontSize:17,fontWeight:800,color:"#E11D48"}}>{grandTot.toFixed(2)} €</span>
+      </div>}
+
+      {groupKeys.map(k=>{
+        const list=(s?groups[k].filter(matchR):groups[k]);
+        if(list.length===0)return null;
+        const tot=groups[k].reduce((a,r)=>a+(parseFloat(r.spesa)||0),0);
+        const manca=groups[k].some(r=>r.spesa==null);
+        return (
+          <IOSCard key={k} style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"#FDF6DC",borderTopLeftRadius:16,borderTopRightRadius:16}}>
+              <span style={{fontSize:14,fontWeight:800,color:"#B8860B"}}>🧾 DDT fornitore {k}</span>
+              <span style={{fontSize:14,fontWeight:800,color:"#E11D48"}}>{tot.toFixed(2)} €{manca?" ⚠️":""}</span>
+            </div>
+            {list.map(row)}
+          </IOSCard>
+        );
+      })}
+
+      {unassigned.length>0&&(
+        <IOSCard style={{marginBottom:12}}>
+          <div style={{padding:"10px 14px",fontSize:12,fontWeight:700,color:C.secondary}}>DA ASSEGNARE ({unassigned.length})</div>
+          {unassigned.map(row)}
+        </IOSCard>
+      )}
+
+      {assigned.length===0&&!s&&<div style={{textAlign:"center",padding:"30px 20px",color:C.secondary}}><div style={{fontSize:44,marginBottom:10}}>🧾</div><div style={{fontSize:15,fontWeight:600,marginBottom:4}}>Nessun costo per DDT fornitore</div><div style={{fontSize:13}}>Cerca una riparazione qui sopra per assegnarle il n° DDT del fornitore e la spesa.</div></div>}
+
+      <div style={{height:8}}/>
+      <Btn label="Chiudi" variant="secondary" full onClick={onClose}/>
+    </Sheet>
+  );
+}
+
+function DDTPage({ddts,repairs,customers,onView,onNew,onCosti}) {
   const [q,setQ]=useState("");
   const filtered=[...ddts].filter(d=>!q||d.numero.toLowerCase().includes(q.toLowerCase())||(d.riparatore?.nome||"").toLowerCase().includes(q.toLowerCase())).sort((a,b)=>(b.data||"").localeCompare(a.data||""));
 
@@ -1793,6 +1884,8 @@ function DDTPage({ddts,repairs,customers,onView,onNew}) {
           </div>
         </div>
       )}
+
+      {onCosti&&<button onClick={onCosti} style={{width:"100%",background:"#FDF6DC",border:"1px solid #F0E2B8",borderRadius:12,padding:"11px 14px",marginBottom:12,color:"#B8860B",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"-apple-system,sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>🧾 Costi DDT fornitore — verifica fatture</button>}
 
       <input style={{width:"100%",background:C.white,border:"none",borderRadius:12,padding:"10px 14px",fontSize:15,fontFamily:"-apple-system,sans-serif",boxShadow:"0 1px 3px rgba(0,0,0,.07)",outline:"none",marginBottom:14,boxSizing:"border-box"}} placeholder="🔍  Cerca DDT o riparatore…" value={q} onChange={e=>setQ(e.target.value)}/>
 
@@ -2037,6 +2130,8 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   const [accInput,setAccInput]=useState("");
   const [editSpesa,setEditSpesa]=useState(false);
   const [spesaInput,setSpesaInput]=useState("");
+  const [editDdtForn,setEditDdtForn]=useState(false);
+  const [ddtFornInput,setDdtFornInput]=useState("");
   const [editFinale,setEditFinale]=useState(false);
   const [finaleInput,setFinaleInput]=useState("");
   const [editMarcaRef,setEditMarcaRef]=useState(false);
@@ -2073,6 +2168,8 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   const saveAcc=()=>{onAccontoChange(r.id,accInput===""?null:parseFloat(accInput)||null);setEditAcc(false);};
   const startEditSpesa=()=>{setSpesaInput(r.spesa!=null?String(r.spesa):"");setEditSpesa(true);};
   const saveSpesa=()=>{onSpesaChange&&onSpesaChange(r.id,spesaInput===""?null:parseFloat(spesaInput)||null);setEditSpesa(false);};
+  const startEditDdtForn=()=>{setDdtFornInput(r.ddtFornitore||"");setEditDdtForn(true);};
+  const saveDdtForn=()=>{onFieldChange&&onFieldChange(r.id,{ddtFornitore:ddtFornInput.trim()||null});setEditDdtForn(false);};
   const startEditFinale=()=>{setFinaleInput(r.prezzoFinale!=null?String(r.prezzoFinale):"");setEditFinale(true);};
   const saveFinale=()=>{onPrezzoFinaleChange&&onPrezzoFinaleChange(r.id,finaleInput===""?null:parseFloat(finaleInput)||null);setEditFinale(false);};
   return (
@@ -2214,6 +2311,24 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
                 <div style={{fontSize:15,color:r.spesa!=null?C.label:C.secondary,fontWeight:r.spesa!=null?600:400}}>{r.spesa!=null?r.spesa+" €":"Non registrato"}</div>
               </div>
               <button onClick={startEditSpesa} style={{background:"#FFF1F2",border:"none",borderRadius:8,padding:"5px 9px",color:"#E11D48",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
+            </div>
+        }
+        {/* N° DDT fornitore (rientro) */}
+        {editDdtForn
+          ?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🧾</span>
+              <input autoFocus type="text" placeholder="es. 42" value={ddtFornInput} onChange={e=>setDdtFornInput(e.target.value)}
+                style={{flex:1,fontSize:15,border:"1px solid #B8860B",borderRadius:8,padding:"5px 8px",outline:"none",fontFamily:"-apple-system,sans-serif"}}/>
+              <button onClick={saveDdtForn} style={{background:"#059669",border:"none",borderRadius:8,padding:"5px 10px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✓</button>
+              <button onClick={()=>setEditDdtForn(false)} style={{background:"#E5E5EA",border:"none",borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>✕</button>
+            </div>
+          :<div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderBottom:"1px solid #F2F2F7"}}>
+              <span style={{fontSize:19,width:26,textAlign:"center",flexShrink:0}}>🧾</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.secondary,fontWeight:500}}>N° DDT fornitore (rientro)</div>
+                <div style={{fontSize:15,color:r.ddtFornitore?C.label:C.secondary,fontWeight:r.ddtFornitore?600:400}}>{r.ddtFornitore||"Non registrato"}</div>
+              </div>
+              <button onClick={startEditDdtForn} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"5px 9px",color:"#B8860B",fontSize:13,cursor:"pointer",flexShrink:0}}>✏️</button>
             </div>
         }
         {/* Prezzo finale */}
@@ -2867,9 +2982,17 @@ function DDTForm({repairs,customers,repairers,existing,onSave,onClose}) {
 }
 
 /* ── DDT Detail ── */
-function DDTDetail({ddt,repairs,customers,onClose,onReturn,onPrint,onEdit,onDelete}) {
+function DDTDetail({ddt,repairs,customers,onClose,onReturn,onPrint,onEdit,onRientroPatch,onRepairSpesa,onDelete}) {
   const [confirmDelete,setConfirmDelete]=useState(false);
+  const [editRientro,setEditRientro]=useState(false);
+  const [rData,setRData]=useState(ddt.dataRientro||"");
+  const [editSpesaId,setEditSpesaId]=useState(null);
+  const [spesaInput,setSpesaInput]=useState("");
+  const [ddtFornInput,setDdtFornInput]=useState("");
   const items=repairs.filter(r=>ddt.riparazioniIds?.includes(r.id));
+  const openRientro=()=>{setRData(ddt.dataRientro||"");setEditRientro(true);};
+  const saveRientro=()=>{onRientroPatch&&onRientroPatch(ddt.id,{dataRientro:rData||null});setEditRientro(false);};
+  const saveSpesa=(id)=>{onRepairSpesa&&onRepairSpesa(id,{spesa:spesaInput===""?null:parseFloat(spesaInput)||null,ddtFornitore:ddtFornInput.trim()||null});setEditSpesaId(null);};
 
   /* Calcola totali */
   const totSpesa=items.reduce((s,r)=>s+(parseFloat(r.spesa)||0),0);
@@ -2882,11 +3005,32 @@ function DDTDetail({ddt,repairs,customers,onClose,onReturn,onPrint,onEdit,onDele
       <IOSCard style={{marginBottom:12}}>
         <IOSRow icon="🏢" label={ddt.riparatore?.nome||"—"} sub={ddt.riparatore?.indirizzo}/>
         {ddt.riparatore?.piva&&<IOSRow icon="🪪" label="P.IVA" value={ddt.riparatore.piva}/>}
-        <IOSRow icon="📅" label="Data invio" value={fmtDate(ddt.data)}/>
-        {ddt.dataRientro&&<IOSRow icon="📅" label="Data rientro" value={fmtDate(ddt.dataRientro)}/>}
-        {ddt.ddtRientroNumero&&<IOSRow icon="🧾" label="DDT fornitore" value={ddt.ddtRientroNumero}/>}
+        <IOSRow icon="📤" label="Data invio" value={fmtDate(ddt.data)}/>
         <IOSRow icon="📦" label="Oggetti" value={items.length+" pz."} last/>
       </IOSCard>
+
+      {/* ── Rientro dal fornitore (inseribile/modificabile in ogni momento) ── */}
+      <div style={{background:C.white,borderRadius:16,padding:14,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editRientro?10:0}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.secondary}}>📥 RIENTRO DAL FORNITORE</div>
+          {onRientroPatch&&!editRientro&&<button onClick={openRientro} style={{background:"#FDF6DC",border:"none",borderRadius:8,padding:"4px 9px",color:"#B8860B",fontSize:13,cursor:"pointer"}}>✏️</button>}
+        </div>
+        {editRientro?(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <IOSInput label="📅 Data rientro" type="date" value={rData} onChange={e=>setRData(e.target.value)}/>
+            <div style={{display:"flex",gap:8}}>
+              <Btn label="Annulla" variant="secondary" full onClick={()=>setEditRientro(false)}/>
+              <Btn label="💾 Salva" full onClick={saveRientro}/>
+            </div>
+          </div>
+        ):(
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+            <span style={{fontSize:13,color:ddt.dataRientro?C.label:C.secondary,fontWeight:600}}>📅 {ddt.dataRientro?fmtDate(ddt.dataRientro):"rientro da inserire"}</span>
+            <span style={{fontSize:13,color:totSpesa>0?"#E11D48":C.secondary,fontWeight:700}}>💰 Spesa {totSpesa>0?totSpesa.toFixed(2)+" €":"da inserire"}</span>
+          </div>
+        )}
+        <div style={{fontSize:11,color:C.secondary,marginTop:8}}>Il n° DDT del fornitore si indica per singolo pezzo qui sotto (una sua DDT può contenere pezzi di spedizioni diverse).</div>
+      </div>
       {ddt.riparatore?.trasporto&&(()=>{const t=ddt.riparatore.trasporto;return(
         <IOSCard style={{marginBottom:12}}>
           {t.causale&&<IOSRow icon="📋" label="Causale" value={t.causale}/>}
@@ -2959,21 +3103,35 @@ function DDTDetail({ddt,repairs,customers,onClose,onReturn,onPrint,onEdit,onDele
 
       <SectionTitle>Oggetti inviati</SectionTitle>
       {items.map(r=>(
-        <div key={r.id} style={{background:C.white,borderRadius:14,padding:"12px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center"}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",gap:8,marginBottom:4}}>
-              <span style={{fontSize:14,fontWeight:700,color:C.label}}>{r.numero}</span>
-              <IOSBadge status={r.status}/>
-              {r.richiestaPreventivo&&<span style={{fontSize:11,color:C.purple,fontWeight:600}}>⏳ prev.</span>}
-            </div>
-            <div style={{fontSize:13,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descrizione}</div>
-            {(r.spesa||r.prezzoFinale)&&(
-              <div style={{fontSize:12,marginTop:4,display:"flex",gap:10}}>
+        <div key={r.id} style={{background:C.white,borderRadius:14,padding:"12px 14px",marginBottom:8}}>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",gap:8,marginBottom:4}}>
+                <span style={{fontSize:14,fontWeight:700,color:C.label}}>{r.numero}</span>
+                <IOSBadge status={r.status}/>
+                {r.richiestaPreventivo&&<span style={{fontSize:11,color:C.purple,fontWeight:600}}>⏳ prev.</span>}
+              </div>
+              <div style={{fontSize:13,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descrizione}</div>
+              <div style={{fontSize:12,marginTop:4,display:"flex",gap:10,flexWrap:"wrap"}}>
+                {r.ddtFornitore&&<span style={{color:"#B8860B",fontWeight:600}}>🧾 DDT {r.ddtFornitore}</span>}
                 {r.spesa&&<span style={{color:"#E11D48",fontWeight:600}}>↓ {parseFloat(r.spesa).toFixed(2)} €</span>}
                 {r.prezzoFinale&&<span style={{color:"#059669",fontWeight:600}}>↑ {parseFloat(r.prezzoFinale).toFixed(2)} €</span>}
               </div>
-            )}
+            </div>
+            {onRepairSpesa&&editSpesaId!==r.id&&<button onClick={()=>{setSpesaInput(r.spesa!=null?String(r.spesa):"");setDdtFornInput(r.ddtFornitore||"");setEditSpesaId(r.id);}} style={{background:"#FFF1F2",border:"none",borderRadius:8,padding:"5px 9px",color:"#E11D48",fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>💰 Costo</button>}
           </div>
+          {editSpesaId===r.id&&(
+            <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <IOSInput label="🧾 N° DDT fornitore" placeholder="es. 42" value={ddtFornInput} onChange={e=>setDdtFornInput(e.target.value)} autoFocus/>
+                <IOSInput label="💰 Spesa (€)" type="number" step="0.01" placeholder="0.00" value={spesaInput} onChange={e=>setSpesaInput(e.target.value)}/>
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <Btn label="Annulla" variant="secondary" small onClick={()=>setEditSpesaId(null)}/>
+                <Btn label="💾 Salva" small onClick={()=>saveSpesa(r.id)}/>
+              </div>
+            </div>
+          )}
         </div>
       ))}
 
@@ -3328,8 +3486,8 @@ function OrderCard({order,customers,onView,onConsegna}) {
           {totProdotti>0&&<div style={{fontSize:12,color:C.secondary,marginTop:2}}>{totProdotti.toFixed(2)} €</div>}
         </div>}
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          {order.dataOrdine&&<span style={{fontSize:12,color:C.secondary}}>Ord: {fmtDate(order.dataOrdine)}</span>}
-          {earliestDate&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":C.secondary,fontWeight:isOverdue?700:400}}>{isOverdue?"⚠️ ":""}Cons: {fmtDate(earliestDate)}</span>}
+          {order.dataOrdine&&<span style={{fontSize:12,color:C.secondary}}>🧾 {fmtDate(order.dataOrdine)}</span>}
+          {earliestDate&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":C.secondary,fontWeight:isOverdue?700:400}}>{isOverdue?"⚠️ ":"🚚 "}{fmtDate(earliestDate)}</span>}
           {totAcconto>0&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {totAcconto.toFixed(2)} €</span>}
         </div>
       </div>
@@ -3628,15 +3786,15 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
         <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Date e dettagli</div>
         <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Tutto opzionale — puoi modificare in seguito</div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <IOSInput label="Data ordine" type="date" value={form.dataOrdine||today()} onChange={e=>set("dataOrdine",e.target.value)}/>
-            <IOSInput label="Arrivo / consegna previsto" type="date" value={form.dataConsegnaPrevista||""} onChange={e=>set("dataConsegnaPrevista",e.target.value)}/>
-          </div>
+          <IOSInput label="🧾 Data creazione ordine" type="date" value={form.dataOrdine||today()} onChange={e=>set("dataOrdine",e.target.value)}/>
           <div style={{background:"#FDF6DC",borderRadius:14,padding:14,border:"1px solid #F0E2B8"}}>
             <div style={{fontSize:13,fontWeight:700,color:"#B8860B",marginBottom:10}}>📦 ORDINE AL FORNITORE</div>
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <IOSInput label="Ordinato a" placeholder="Es. Comete, grossista…" value={form.fornitore||""} onChange={e=>set("fornitore",e.target.value)}/>
-              <IOSInput label="Data ordine al fornitore" type="date" value={form.dataOrdineFornitore||""} onChange={e=>set("dataOrdineFornitore",e.target.value)}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <IOSInput label="📦 Ordinato al fornitore il" type="date" value={form.dataOrdineFornitore||""} onChange={e=>set("dataOrdineFornitore",e.target.value)}/>
+                <IOSInput label="🚚 Arrivo previsto" type="date" value={form.dataConsegnaPrevista||""} onChange={e=>set("dataConsegnaPrevista",e.target.value)}/>
+              </div>
             </div>
           </div>
           <div>
@@ -3669,7 +3827,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
         <IOSCard style={{marginBottom:12}}>
           <IOSRow icon="👤" label="Cliente" value={selC?`${selC.nome} ${selC.cognome}`:"—"}/>
           {form.operatore&&<IOSRow icon="👷" label="Operatore" value={form.operatore}/>}
-          <IOSRow icon="📅" label="Data ordine" value={fmtDate(form.dataOrdine)||"—"} last/>
+          <IOSRow icon="🧾" label="Data creazione ordine" value={fmtDate(form.dataOrdine)||"—"} last/>
         </IOSCard>
 
         {form.prodotti.length>0&&(
@@ -3684,7 +3842,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:2}}>
                     {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
                     {p.dataOrdineFornitore&&<span style={{fontSize:12,color:"#B8860B",fontWeight:600}}>📦 {fmtDate(p.dataOrdineFornitore)}</span>}
-                    {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(p.dataConsegnaPrevista)}</span>}
+                    {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>🚚 {fmtDate(p.dataConsegnaPrevista)}</span>}
                     {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
                   </div>
                 </div>
@@ -3705,7 +3863,7 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
                 {form.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {form.prezzoVendita} €</span>}
                 {form.dataOrdineFornitore&&<span style={{fontSize:12,color:"#B8860B",fontWeight:600}}>📦 {fmtDate(form.dataOrdineFornitore)}</span>}
-                {form.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>📅 {fmtDate(form.dataConsegnaPrevista)}</span>}
+                {form.dataConsegnaPrevista&&<span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>🚚 {fmtDate(form.dataConsegnaPrevista)}</span>}
                 {form.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {form.acconto} €</span>}
                 <span style={{background:ORDER_STATUSES[form.statoProdotto]?.bg,color:ORDER_STATUSES[form.statoProdotto]?.color,fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:10}}>{ORDER_STATUSES[form.statoProdotto]?.label}</span>
               </div>
@@ -3769,8 +3927,8 @@ function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onP
           </div>
           <WABtn customer={c} size={32}/>
         </div>}
-        {order.dataOrdine&&<IOSRow icon="📅" label="Data ordine" value={fmtDate(order.dataOrdine)}/>}
-        {earliestDate&&<IOSRow icon="🚚" label="Consegna prevista" value={fmtDate(earliestDate)}/>}
+        {order.dataOrdine&&<IOSRow icon="🧾" label="Data creazione ordine" value={fmtDate(order.dataOrdine)}/>}
+        {earliestDate&&<IOSRow icon="🚚" label="Arrivo previsto" value={fmtDate(earliestDate)}/>}
         <IOSRow icon="🔢" label="Numero" value={order.numero} last/>
       </IOSCard>
 
@@ -3797,7 +3955,7 @@ function OrderDetail({order,customers,onClose,onEdit,onStatusChange,onDelete,onP
                     <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
                       {p.prezzoVendita&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>💰 {p.prezzoVendita} €</span>}
                       {p.acconto&&<span style={{fontSize:12,color:"#059669",fontWeight:600}}>Acc: {p.acconto} €</span>}
-                      {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":"#3B82F6",fontWeight:600}}>{isOverdue?"⚠️ ":"📅 "}{fmtDate(p.dataConsegnaPrevista)}</span>}
+                      {p.dataConsegnaPrevista&&<span style={{fontSize:12,color:isOverdue?"#FF3B30":"#3B82F6",fontWeight:600}}>{isOverdue?"⚠️ ":"🚚 "}{fmtDate(p.dataConsegnaPrevista)}</span>}
                     </div>
                   </div>
                   <button onClick={()=>setExpandedProd(isExp?null:p.id)} style={{background:ps.bg,border:`1.5px solid ${ps.color}`,borderRadius:20,padding:"4px 10px",color:ps.color,fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>{ps.label} ▾</button>
@@ -4034,6 +4192,7 @@ function MainApp() {
   const [ddtForm,setDdtForm]=useState(false);
   const [editDDT,setEditDDT]=useState(null);
   const [viewDDT,setViewDDT]=useState(null);
+  const [showCostiDDT,setShowCostiDDT]=useState(false);
   const [ddtReturn,setDdtReturn]=useState(null);
   const [liveQR,setLiveQR]=useState(false);
   const [waToast,setWaToast]=useState(null);
@@ -4198,6 +4357,22 @@ function MainApp() {
     const rep=repairs.find(r=>r.id===id);if(!rep)return;
     const updated={...rep,...patch};
     await withSync(()=>api.upsertRepair(updated));
+    if(viewRepair?.id===id)setViewRepair(updated);
+  };
+
+  const handleDDTRientroPatch=async(ddtId,patch)=>{
+    const d=ddts.find(x=>x.id===ddtId);if(!d)return;
+    const updated={...d,...patch};
+    await withSync(()=>api.upsertDDT(updated));
+    setDdts(prev=>prev.map(x=>x.id===ddtId?updated:x));
+    if(viewDDT?.id===ddtId)setViewDDT(updated);
+  };
+
+  const handleDDTRepairSpesa=async(id,patch)=>{
+    const rep=repairs.find(r=>r.id===id);if(!rep)return;
+    const updated={...rep,...patch};
+    await withSync(()=>api.upsertRepair(updated));
+    setRepairs(prev=>prev.map(r=>r.id===id?updated:r));
     if(viewRepair?.id===id)setViewRepair(updated);
   };
 
@@ -4483,7 +4658,8 @@ function MainApp() {
       {viewCustomer&&<CustomerDetail customer={viewCustomer} repairs={repairs.filter(r=>r.customerId===viewCustomer.id)} onClose={()=>setViewCustomer(null)} onEdit={c=>{setViewCustomer(null);setCustomerForm(c);}} onOpenRepair={r=>{setViewCustomer(null);setViewRepair(r);}} onReceipt={openReceipt} onDelete={handleDeleteCustomer}/>}
       {ddtForm&&<DDTForm repairs={repairs} customers={customers} repairers={repairers} onSave={handleDDT} onClose={()=>setDdtForm(false)}/>}
       {editDDT&&<DDTForm repairs={repairs} customers={customers} repairers={repairers} existing={editDDT} onSave={handleEditDDT} onClose={()=>setEditDDT(null)}/>}
-      {viewDDT&&<DDTDetail ddt={viewDDT} repairs={repairs} customers={customers} onClose={()=>setViewDDT(null)} onReturn={()=>{setDdtReturn(viewDDT);setViewDDT(null);}} onPrint={()=>printHTML(ddtHTML(viewDDT,repairs.filter(r=>viewDDT.riparazioniIds?.includes(r.id))))} onEdit={()=>{setEditDDT(viewDDT);setViewDDT(null);}} onDelete={handleDeleteDDT}/>}
+      {viewDDT&&<DDTDetail ddt={viewDDT} repairs={repairs} customers={customers} onClose={()=>setViewDDT(null)} onReturn={()=>{setDdtReturn(viewDDT);setViewDDT(null);}} onPrint={()=>printHTML(ddtHTML(viewDDT,repairs.filter(r=>viewDDT.riparazioniIds?.includes(r.id))))} onEdit={()=>{setEditDDT(viewDDT);setViewDDT(null);}} onRientroPatch={handleDDTRientroPatch} onRepairSpesa={handleDDTRepairSpesa} onDelete={handleDeleteDDT}/>}
+      {showCostiDDT&&<CostiDDTFornitore repairs={repairs} customers={customers} onRepairPatch={handleDDTRepairSpesa} onClose={()=>setShowCostiDDT(false)}/>}
       {ddtReturn&&<DDTReturn ddt={ddtReturn} repairs={repairs} customers={customers} onSave={handleReturn} onClose={()=>setDdtReturn(null)}/>}
     </>
   );
@@ -4494,7 +4670,7 @@ function MainApp() {
       {tab==="repairs"&&<RepairsPage repairs={repairs} customers={customers} ddts={ddts} onView={setViewRepair} onReceipt={openReceipt} onNew={()=>setWizard(true)} onScan={()=>setLiveQR(true)} navFilter={navFilter} onClearNavFilter={()=>setNavFilter("")} onRientro={()=>setRientroRapido(true)}/>}
       {tab==="customers"&&<CustomersPage customers={customers} repairs={repairs} onView={setViewCustomer} onNew={()=>setCustomerForm({})} onImport={()=>setImportContatti(true)} onDuplicates={()=>setShowDuplicates(true)}/>}
       {tab==="orders"&&<OrdersPage orders={orders} customers={customers} onView={setViewOrder} onNew={()=>setOrderForm({})} onConsegna={handleConsegnaOrder}/>}
-      {tab==="ddt"&&<DDTPage ddts={ddts} repairs={repairs} customers={customers} onView={setViewDDT} onNew={()=>setDdtForm(true)}/>}
+      {tab==="ddt"&&<DDTPage ddts={ddts} repairs={repairs} customers={customers} onView={setViewDDT} onNew={()=>setDdtForm(true)} onCosti={()=>setShowCostiDDT(true)}/>}
       {tab==="settings"&&<SettingsPage customers={customers} repairs={repairs} ddts={ddts} repairers={repairers} orders={orders} onRestore={handleRestore} onSaveRepairer={handleSaveRepairer} onDeleteRepairer={handleDeleteRepairer}/>}
     </>
   );

@@ -5,6 +5,54 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Hotfix notifiche preventivi persi + filtri preventivo (14-15/07/2026) — branch `gestionale`
+
+- **Hotfix wa-bot — riconciliazione periodica** (`5023d75`, COMMITTATO e LIVE). **Incidente**: 7 preventivi accettati dai clienti via link WA (R2026-0138/0246/0250/0264/0272/0289/0303) **non erano stati notificati** a negozio/riparatore (`wa_accept_sent_at IS NULL`). **Causa**: la subscription Supabase Realtime cade in silenzio senza riconnettersi (la callback `.subscribe` gestiva solo `SUBSCRIBED`) e `reconcilePending` girava **solo all'avvio**; col processo su da 10 giorni i buchi si sono accumulati (pattern intermittente confermato via `quote_tokens.accepted_at`). **Fix** in `print-server/wa-bot.js`: `setInterval` ogni 5 min che ri-esegue `reconcilePending` (rete di sicurezza, idempotente via Set `waSent` + `wa_*_sent_at` → niente doppioni) + log degli stati Realtime anomali. **Recupero**: riavviato il LaunchAgent → `reconcilePending` ha inviato tutti e 7 (verificato: conteggio DB pendenti sceso a 0; WhatsApp riconnesso senza QR). **Attenzione**: R2026-0289 al riparatore NON è partito (nessun telefono nello snapshot DDT né nel registro) — solo al negozio; se serve, avvisare a mano. **Diagnostica utile**: query REST `repairs?preventivo_accettato=eq.true&wa_accept_sent_at=is.null&eliminata=eq.false` (con chiave anon dal `.env`) elenca gli accettati non notificati. Il commit ha usato staging selettivo per **escludere** la modifica Fase 1 (service-role key) presente nello stesso file.
+
+- **Filtri preventivo nella lista riparazioni** (`RepairsPage`, NON committato). Aggiunte 3 voci al menu filtro: **🧾 Con preventivo** (`richiestaPreventivo`), **✅ Prev. accettato** (`preventivoAccettato`), **❌ Prev. rifiutato** (`preventivoRifiutato`) — valori `__prev__`/`__prev_acc__`/`__prev_rif__` nella logica `matchF`. **Nota modello**: `preventivoRifiutato` non era letto da `toRepair` → aggiunto **solo in lettura** (`r.preventivo_rifiutato||false`); volutamente **NON** nel payload di `upsertRepair`, così un salvataggio dall'app non azzera un rifiuto impostato dalle pagine pubbliche (evita perdita dati; PostgREST upsert preserva le colonne non presenti nel payload). "Con preventivo" interpretato come *richiesto* (superset); da confermare se il proprietario vuole *solo in attesa*.
+
+### Costi DDT fornitore + chiarezza date ordini (08-10/07/2026) — branch `gestionale` — NON committato, in attesa di test/commit
+
+Lavoro su `src/App.js`, **tutto nel working tree, non ancora committato** (impilato sopra i commit già pushati e insieme ai file Fase 1 sicurezza, anch'essi non committati). Da testare in-app poi committare (separando: relabeling date ordini / feature costi DDT fornitore).
+
+- **Chiarezza date negli ordini** (relabeling + icone, nessuna logica): tre date con terminologia sovrapposta creavano confusione. Ora icone dedicate **🧾 creazione ordine · 📦 ordine al fornitore · 🚚 arrivo previsto** ovunque (wizard step 5, riepilogo, `OrderDetail`, `OrderCard`). `dataOrdine` (ordine, default oggi) → "Data creazione ordine"; `dataOrdineFornitore` (prodotto) → "Ordinato al fornitore il"; `dataConsegnaPrevista` (prodotto, arrivo=consegna al cliente, deciso col proprietario) → "Arrivo previsto". Nel wizard il blocco fornitore raggruppa Ordinato a / Ordinato al fornitore il / Arrivo previsto. Testi rivolti al cliente (stampa, WA) restano "Consegna".
+
+- **Costi DDT fornitore per verifica fatture** (feature nuova). **Contesto**: il fornitore/riparatore emette le SUE DDT (sua numerazione) al rientro, e in fattura elenca i numeri delle sue DDT con gli importi; il proprietario vuole tracciare il costo di ogni SUA DDT (= somma spese delle singole riparazioni, inserite a mano) per verificare l'importo in fattura. **Decisione col proprietario**: mappatura **mista** (una sua DDT può contenere pezzi di spedizioni diverse / una spedizione torna spezzata) → il n° DDT fornitore si traccia **per riparazione**, non sul DDT di spedizione. Inserimento in **entrambi** i punti (schermata dedicata + dettaglio riparazione).
+  - **Migration necessaria** (NON ancora applicata): `alter table public.repairs add column if not exists ddt_fornitore text;`. Fino ad allora il fallback PGRST204 di `upsertRepair` strippa `ddt_fornitore` (salva senza crash, ma il campo non persiste). Modello: `ddtFornitore` in `toRepair`/`upsertRepair`.
+  - **Schermata `CostiDDTFornitore`** (Sheet): aperta dal bottone "🧾 Costi DDT fornitore — verifica fatture" in cima alla tab DDT (`DDTPage` prop `onCosti`). Raggruppa tutte le riparazioni con `ddtFornitore` per numero, con totale per gruppo (⚠️ se manca una spesa) + totale generale; ricerca per assegnare a una riparazione n° DDT + spesa (sezione "Da assegnare" quando cerchi). È lo strumento di spunta della fattura.
+  - **`RepairDetail`**: nuova riga editabile "🧾 N° DDT fornitore (rientro)" accanto a "Costo riparazione" (salva via `onFieldChange`).
+  - **`DDTDetail` riallineato al modello per-pezzo** (correzione dell'assunzione 1:1 fatta il 07/07): rimosso l'input "N° DDT fornitore" a livello di DDT di spedizione; la card "📥 RIENTRO DAL FORNITORE" gestisce solo **data rientro** (editabile in ogni momento, anche a DDT già rientrato, via `handleDDTRientroPatch` — patch del solo DDT, non tocca gli stati riparazioni) + totale spesa. Nella lista "Oggetti inviati" il bottone "💰 Costo" imposta **n° DDT fornitore + spesa** insieme (via `handleDDTRepairSpesa(id, patch)`).
+  - Handler nuovi in `MainApp`: `handleDDTRientroPatch(ddtId, patch)` e `handleDDTRepairSpesa(id, patch)` — aggiornano anche lo stato locale (`setDdts`/`setRepairs`), non solo via Realtime.
+  - **Follow-up possibile** (non fatto): n° DDT fornitore + spesa nella stampa DDT / export.
+
+### Fix ordini + email fornitori + ricevute multi-oggetto (07-09/07/2026) — branch `gestionale` — MERGIATO e PUSHATO
+
+Sessione di fix/piccole feature su richiesta del negozio, tutti su `src/App.js`, committati singolarmente e pushati su `origin/gestionale` (`c859bdb..79ccba9`). **Live in produzione.** I file della Fase 1 sicurezza sono rimasti fuori (non committati).
+
+- **`c859bdb` — fix "Aggiungi altro articolo" in modifica ordine**: in modifica ordine il wizard parte allo step 6 (Riepilogo) senza articolo in compilazione; il bottone chiamava `buildCurrentProd()` → `null` (descrizione vuota) e usciva subito → non si riusciva ad aggiungere un nuovo articolo. Ora naviga allo step 2 anche senza articolo corrente. In più: il form `OrderForm` ora porta `numero` (prima perso in modifica) e `handleSaveOrder` aggiorna `orders[]` in locale (come `handleOrderStatus`/`handleOrderProductStatus`) → la modifica compare subito senza attendere il Realtime.
+- **`8d66795` — campo email nel registro fornitori (riparatori)**: input Email nella scheda `RepairerEditForm`; `email` aggiunto al fallback PGRST204 di `upsertRepairer` (regge se la colonna manca). **Migration applicata**: `alter table public.repairers add column if not exists email text;`. Nota: il registro `repairers` è quello che il negozio chiama "fornitori/riparatori"; `getRepairers`/`upsertRepairer` fanno `select("*")`/upsert dell'oggetto intero, quindi l'email fluisce da sola.
+- **`486f3ed` — stampa TUTTE le etichette per riparazioni multi-oggetto**: `handleSaveRepair` crea N record ma apriva `ReceiptModal` per un solo oggetto (`receiptHTML(savedRepairs[0])`); `multiReceiptHTML` (1 etichetta cliente/negozio di riepilogo + N riparatore) era **definita ma mai usata** (dead code, CSS già presente in `LABEL_CSS`). Ora il modal riceve `allRepairs=savedRepairs` e, se >1, stampa `multiReceiptHTML`; titolo/scheda/messaggio WA adattati. **Limite**: la stampa combinata funziona alla creazione; ristampando più tardi dal dettaglio ogni oggetto è un record a sé (nessun legame di gruppo) → si ristampa singolarmente.
+- **`79ccba9` — fornitore/data ordine/arrivo per prodotto negli ordini**: nuovi dati per prodotto (JSONB, **nessuna migration**): `fornitore` ("Ordinato a", testo libero — riesumato l'input rimosso in passato) e `dataOrdineFornitore` ("Data ordine al fornitore"); l'**arrivo previsto = `dataConsegnaPrevista`** esistente (deciso col proprietario: stessa cosa della "consegna prevista", rietichettata "Arrivo / consegna previsto"). Inseribili nel **wizard** (step Date) per i nuovi ordini e **modificabili inline per prodotto nel dettaglio ordine** (nuovo handler `handleOrderProductPatch(orderId,prodId,patch)` — merge + ricalcolo `dataConsegnaPrevista` earliest + persistenza; matita ✏️ sulla riga "📦" di ogni articolo in `OrderDetail`). Visibili anche nel **riepilogo wizard** e nella **lista ordini** (`OrderCard`, riga dorata "📦 fornitore · ord. data · arrivo data") senza aprire la scheda. **Motivo dell'edit inline**: il wizard in modifica sa solo creare nuovi prodotti (richiede descrizione), quindi i prodotti già in ordine non erano raggiungibili → il proprietario non riusciva a impostare il fornitore su ordini esistenti.
+- **Nota commit author**: i commit risultano firmati `Zerrillo preziosi <adrianapertusotti@Macmini.local>` (config git di default della macchina, mai impostata esplicitamente).
+
+### Sicurezza — Fase 1 (fondamenta dati) preparata (07/07/2026) — branch `gestionale` — NON ancora applicata
+
+Prima sessione del **piano sicurezza/migrazione Netlify** (Parte 3, Fase 1). Obiettivo: RLS a minimo privilegio + RPC pubbliche token-based + service-role a wa-bot/backup. **Tutto nel repo, niente ancora applicato** (né SQL su Supabase, né push su GitHub Pages).
+
+- **Censimento client→permessi** (in `supabase/sql/FASE1-RUNBOOK.md`): oggi tutte le tabelle hanno `anon_all … for all to anon using(true)` (`backup/backup.js:143-165`). **App, wa-bot e backup girano tutti come `anon`** — la stessa identità della chiave pubblica su GitHub. Le pagine pubbliche leggevano `repairs?…&select=*` (colonne interne esposte → C1/M8) e facevano PATCH diretti (doppia submit → M10).
+- **Vincolo di sequenza (chiave):** riscrivere le pagine in RPC **non** riduce l'esposizione finché `anon` resta `using(true)` (un attaccante ignora l'HTML e colpisce la REST API con la chiave pubblica). Il vero interruttore di C1 è **restringere `anon`**, che però rompe l'app finché non è `authenticated` (**Fase 2**). Quindi **C1 si chiude con Fase 1 + Fase 2 insieme.**
+- **Artefatti prodotti** (in `supabase/sql/`):
+  - `fase1-public-rpc.sql` — 3 funzioni `security definer` token-based: `get_repair_status(link_token)` (solo le 12 colonne mostrate + token preventivo pendente), `get_quote(token)`, `respond_quote(token, decision)` **idempotente** (`FOR UPDATE` → chiude M10; rispecchia su `repairs` → il wa-bot invia il WA). Additivo: applicarlo non cambia il comportamento attuale.
+  - `fase2-anon-lockdown.sql` — l'interruttore di C1, pronto per quando l'app sarà `authenticated`: rimuove `anon_all`, crea `authenticated_all`, revoca i privilegi di `anon`.
+  - `*-rollback.sql` per entrambi; runbook con i passi manuali in `FASE1-RUNBOOK.md`.
+- **Codice modificato** (non-breaking, non ancora deployato):
+  - `docs/repair-status.html` e `docs/approve-quote.html` riscritte per usare **solo** le RPC (via `select=*` e PATCH diretti → chiude C1/M8 lato pagina). UI invariata. Da testare end-to-end **dopo** aver applicato l'SQL, poi push su GitHub Pages.
+  - `print-server/wa-bot.js` e `backup/backup.js`: preferiscono `SUPABASE_SERVICE_ROLE_KEY` con **fallback ad anon** → funzionano identici finché la chiave non è nel `.env`.
+- **Test audit da ribaltare**: `src/__audit__/public-pages.test.js` (test C1/M8 su `select=*` e M10 doppia submit) **fallirà di proposito** — documentava i bug ora chiusi. Va riscritto per asserire il comportamento corretto (uso RPC, niente `select=*`, idempotenza). **Non ancora fatto.**
+- **Passi manuali residui** (nel runbook): 1) applicare `fase1-public-rpc.sql` nel SQL Editor; 2) mettere `SUPABASE_SERVICE_ROLE_KEY` nel root `.env` (già gitignored); 3) deploy pagine + test QR stato e link preventivo (doppio tap → idempotente); 4) ruotare/disabilitare le legacy JWT keys compromesse in git history; 5) Fase 2 (Auth) → applicare il lockdown → C1 chiuso.
+- **Decisione aperta col proprietario**: applicare **solo Fase 1** ora (anon resta CRUD; C1 chiuso dopo con Fase 2) **oppure unire Fase 1 + Fase 2** (Auth ora → lockdown → C1 chiuso subito, niente finestra con chiave anon CRUD). Consiglio: unire, se c'è tempo per il login.
+- **Nota coerenza**: `backup/backup.js` (SCHEMA_SQL) ricrea `anon_all` su restore → da aggiornare **dopo** la Fase 2 perché un ripristino non reintroduca le policy permissive.
+
 ### Repository — deliverable audit committati (04/07/2026)
 
 I documenti dell'audit e lo script di merge, finora non tracciati, sono ora versionati su
@@ -53,7 +101,7 @@ Audit tecnico completo (`AUDIT_REPORT.md`, `audit/FASE1-ANALISI.md`, `audit/FASE
 - **C5 — restore compatibile col backup notturno**: `handleRestore` normalizza le righe snake_case via i convertitori `toX` (prima `telefonoPrefisso`/`codiceFiscale` camelCase non venivano letti → prefisso azzerato a +39, CF perso). Aggiunto il restore/export di `orders` (prima omesso). In `backup.js`: `quote_tokens` in `TABLES` e `SCHEMA_SQL` rigenerato con tutte le colonne reali. **Rettifica**: il backup notturno raggiunge Google Drive (verificato per inode); il problema era la lettura in-app, non la scrittura.
 - **C3 — errori DB visibili**: le `api.*` ignoravano `error`, `withSync` non catturava, le `getX` confondevano vuoto/errore. Ora: flag di errore condiviso (`_writeError`) segnalato da ogni scrittura e letto da `withSync` → **toast rosso "Salvataggio non riuscito — riprova"**; le 5 `getX` ritornano `{data,error}` e le `loadX` su errore **non svuotano** le liste + **banner "Connessione al database persa"**; indicatore sync onesto (rosso). Vedi la nota di rilascio per l'impatto sugli operatori.
 
-**Follow-up rimandati**: C1 sicurezza RLS/chiave pubblica (Sessione 1, prioritario); C4 numerazione DDT/ordine/riparazione con contatore atomico (Sessione 3); A1/A3/A8 outbox WhatsApp con retry (Sessione 4); warning eslint preesistenti e estrazione moduli da `App.js`.
+**Follow-up rimandati**: C1 sicurezza RLS/chiave pubblica → **Fase 1 preparata il 07/07/2026** (vedi entry in cima, artefatti da applicare); C4 numerazione DDT/ordine/riparazione con contatore atomico (Sessione 3); A1/A3/A8 outbox WhatsApp con retry (Sessione 4); warning eslint preesistenti e estrazione moduli da `App.js`.
 
 ### Funzionalità aggiunte in questa sessione (03/07/2026) — fix perdita WA su preventivo accettato mentre bot down
 
@@ -351,6 +399,12 @@ alter table public.orders add column if not exists operatore text;
 -- DDT rientro fornitore
 alter table public.ddts add column if not exists ddt_rientro_numero text;
 
+-- Email registro fornitori/riparatori (sessione 08/07/2026)
+alter table public.repairers add column if not exists email text;
+
+-- N° DDT fornitore per riparazione — costi DDT fornitore (sessione 10/07/2026) — DA APPLICARE
+alter table public.repairs add column if not exists ddt_fornitore text;
+
 -- Timestamps WA notification (sessione 03/07/2026) — fix perdita eventi Realtime
 alter table public.repairs add column if not exists wa_accept_sent_at  timestamptz;
 alter table public.repairs add column if not exists wa_decline_sent_at timestamptz;
@@ -518,6 +572,7 @@ Vantaggi:
 - **Snapshot DDT congelato**: il `riparatore` dentro `ddts` è una copia, non un FK al registro. Telefoni aggiunti al registro `repairers` dopo la creazione DDT non risalgono → fallback per nome nel bot WA.
 
 ## Next Steps
+- **Sicurezza Fase 1**: decidere con il proprietario Fase 1-sola vs. Fase 1+2 unite; poi eseguire i passi del runbook (`supabase/sql/FASE1-RUNBOOK.md`) — applicare RPC, service_role nel `.env`, deploy+test pagine, rotazione chiavi legacy; ribaltare `src/__audit__/public-pages.test.js`.
 - Acquistare stampante Zebra ZD421 (o TSC TE310) WiFi
 - Richiedere a DicoTec export CSV da ProWeb
 - Iniziare sviluppo gestionale sul branch `gestionale`
@@ -530,7 +585,8 @@ Vantaggi:
 - `print-server/wa-bot.js` — bot WhatsApp: notifica riparatore e negozio su accettazione/disdetta preventivo
 - `supabase/functions/approve-quote/index.ts` — Edge Function (non più in uso, mantenuta come backup)
 - `backup/backup.js` — backup notturno Supabase → Google Drive
-- `.env` — credenziali: `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`, `SHOP_WA_TEL`
+- `supabase/sql/` — SQL Fase 1 sicurezza: `fase1-public-rpc.sql` (RPC token-based), `fase2-anon-lockdown.sql` (lockdown anon), rollback, `FASE1-RUNBOOK.md`
+- `.env` — credenziali: `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`, `SHOP_WA_TEL`; **da aggiungere** `SUPABASE_SERVICE_ROLE_KEY` (Fase 1, per wa-bot/backup)
 
 ## Pattern chiave da rispettare
 - Tutte le modifiche vanno in `src/App.js`
