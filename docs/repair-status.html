@@ -66,23 +66,16 @@ function sbHeaders() {
   return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 }
 
-async function sbGet(table, qs) {
-  var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + qs, { headers: sbHeaders() });
+async function sbRpc(fn, args) {
+  var r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, {
+    method: 'POST',
+    headers: sbHeaders(),
+    body: JSON.stringify(args)
+  });
   return r.json();
 }
 
-async function sbPatch(table, qs, body) {
-  await fetch(SB_URL + '/rest/v1/' + table + '?' + qs, {
-    method: 'PATCH',
-    headers: Object.assign({}, sbHeaders(), { 'Prefer': 'return=minimal' }),
-    body: JSON.stringify(body)
-  });
-}
-
-async function doConfirm(quoteToken, r) {
-  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-  await sbPatch('quote_tokens', 'token=eq.' + quoteToken, { accepted_at: new Date().toISOString() });
-  await sbPatch('repairs', 'id=eq.' + esc(r.id), { preventivo_accettato: true });
+function showConfirmed(r) {
   show('<p style="text-align:center;font-size:40px">&#10003;</p>' +
     '<h2>Preventivo confermato!</h2>' +
     '<p>Grazie. Il preventivo di <strong>&euro; ' + esc(r.preventivo) + '</strong> per la riparazione <strong>' + esc(r.numero) + '</strong> &egrave; stato confermato.</p>' +
@@ -90,15 +83,26 @@ async function doConfirm(quoteToken, r) {
     footer());
 }
 
-async function doDecline(quoteToken, r) {
-  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-  await sbPatch('quote_tokens', 'token=eq.' + quoteToken, { declined_at: new Date().toISOString() });
-  await sbPatch('repairs', 'id=eq.' + esc(r.id), { preventivo_rifiutato: true });
+function showDeclined(r) {
   show('<p style="text-align:center;font-size:40px;color:#DC2626">&#10007;</p>' +
     '<h2>Preventivo disdetto</h2>' +
     '<p>Abbiamo ricevuto la sua disdetta per la riparazione <strong>' + esc(r.numero) + '</strong>.</p>' +
     '<p>La contatteremo per concordare il ritiro o ulteriori informazioni.</p>' +
     footer());
+}
+
+async function doConfirm(quoteToken, r) {
+  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  var res = await sbRpc('respond_quote', { p_token: quoteToken, p_decision: 'accept' });
+  if (res === 'declined' || res === 'already_declined') { showDeclined(r); return; }
+  showConfirmed(r);
+}
+
+async function doDecline(quoteToken, r) {
+  document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  var res = await sbRpc('respond_quote', { p_token: quoteToken, p_decision: 'decline' });
+  if (res === 'accepted' || res === 'already_accepted') { showConfirmed(r); return; }
+  showDeclined(r);
 }
 
 function renderStatus(r, quoteToken) {
@@ -149,16 +153,12 @@ async function main() {
   var token = new URLSearchParams(location.search).get('token');
   if (!token) { show('<h2>Link non valido</h2>' + footer()); return; }
 
-  var repairs = await sbGet('repairs', 'link_token=eq.' + token + '&eliminata=eq.false&select=*');
+  var repairs = await sbRpc('get_repair_status', { p_link_token: token });
   var r = repairs && repairs[0];
   if (!r) { show('<h2>Riparazione non trovata</h2>' + footer()); return; }
 
-  var quoteToken = null;
-  if (r.richiesta_preventivo_fornitore && r.preventivo && !r.preventivo_accettato && !r.preventivo_rifiutato) {
-    var tokens = await sbGet('quote_tokens',
-      'repair_id=eq.' + r.id + '&accepted_at=is.null&declined_at=is.null&select=token&order=created_at.desc&limit=1');
-    if (tokens && tokens[0]) quoteToken = tokens[0].token;
-  }
+  // Il token del preventivo pendente arriva già dalla RPC (o null).
+  var quoteToken = r.quote_token || null;
 
   renderStatus(r, quoteToken);
 }
