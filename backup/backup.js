@@ -203,8 +203,10 @@ async function main() {
   log("Connessione a Supabase…");
   const env = loadEnv();
   const url = env.REACT_APP_SUPABASE_URL;
-  const key = env.REACT_APP_SUPABASE_KEY;
-  if (!url || !key) throw new Error("REACT_APP_SUPABASE_URL o REACT_APP_SUPABASE_KEY mancanti nel .env");
+  // Fase 1: preferisci la service_role (bypassa RLS, resiste al lockdown anon
+  // della Fase 2); fallback alla chiave anon finché la service non è nel .env.
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.REACT_APP_SUPABASE_KEY;
+  if (!url || !key) throw new Error("REACT_APP_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY mancanti nel .env");
 
   const supabase = createClient(url, key);
   const dbBackup = { version: 2, date: new Date().toISOString() };

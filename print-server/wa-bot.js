@@ -334,7 +334,9 @@ async function reconcilePending(supabase) {
 /* ── Inizializza il client WhatsApp ── */
 function initWABot() {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
+  // Fase 1: usa la service_role se presente (bypassa RLS, resiste al lockdown
+  // anon della Fase 2); fallback alla chiave anon finché la service non è nel .env.
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.warn('⚠️  Credenziali Supabase mancanti nel .env — WA bot disabilitato');
