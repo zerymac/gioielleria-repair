@@ -26,3 +26,7 @@ yarn-error.log*
 
 # Supabase CLI temp
 supabase/.temp/
+
+# WhatsApp bot session/cache (credenziali di sessione — NON committare)
+print-server/.wwebjs_auth/
+print-server/.wwebjs_cache/
