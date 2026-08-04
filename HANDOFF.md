@@ -5,6 +5,18 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Sessione 04/08/2026 — documentata e committata la coda cartellini `print_jobs` (era live ma non tracciata)
+
+- **Scoperta**: `git status` mostrava `print-server/server.js` modificato (non committato) + un backup `server.js.bak-20260723-174608` non tracciato, **entrambi non documentati** in questo handoff (l'ultima entry era del 21/07). Il `.bak` era identico alla versione committata (HEAD): backup dell'originale preso alle 17:46 del 23/07, subito prima dell'edit delle 18:04.
+- **Cosa era cambiato — feature `initPrintQueue()` in `print-server/server.js`**: una **coda di stampa cartellini per il gestionale/POS** (repo separato `zerrillo-gestionale`), che gira nel **print server condiviso** (un solo processo su porta 3001 serve sia riparazioni sia gestionale). Funziona così:
+  - Si connette a Supabase con `SUPABASE_SECRET_KEY` → `SUPABASE_SERVICE_ROLE_KEY` → `REACT_APP_SUPABASE_KEY` (fallback a cascata; oggi gira su anon).
+  - Ascolta la tabella `print_jobs` via Realtime (`INSERT`) **+ polling ogni 5s** come rete di sicurezza; su ogni job renderizza `job.html` in PDF con Puppeteer (`getBrowser()`, dimensioni `width_mm`×`height_mm`, margini 0) e stampa via `lp -d "<printer>" -n <copies> -o media=Custom.<w>x<h>mm`.
+  - **Claim atomico** `pending → printing` con `.eq('stato','pending')` prima di stampare → niente doppioni anche con Realtime + polling concorrenti. A fine job aggiorna lo stato a `done` (`printed_at`) o `error` (`errore`). Cleanup del PDF temporaneo in ogni caso.
+- **Stato: LIVE e funzionante.** Il processo del print server gira già con questo codice (PID osservato attivo da giorni); il log `/tmp/zerrillo-print.log` mostra `🏷️ Cartellino stampato (<uuid>)` con successo. La modifica era però **solo in working tree** — mai committata → un checkout/reset da git l'avrebbe persa. **Committata oggi** su `gestionale` insieme a questo handoff (commit locale, **non pushato** → non deploya: il server già gira con lo stesso codice su disco).
+- **`print_jobs` Realtime `CHANNEL_ERROR`/`CLOSED`**: stesso churn di connessione già documentato per il Realtime dei preventivi — **non è un guasto**, il polling ogni 5s copre (i cartellini partono comunque). Vedi la diagnosi in fondo alla sezione 21/07.
+- **Pulizia**: rimosso il file backup ridondante `print-server/server.js.bak-20260723-174608` (identico a HEAD; la storia git ora conserva l'originale).
+- **Nota**: la feature vive fisicamente in **questo** repo perché il print server è condiviso, ma appartiene logicamente al gestionale. Tabella `print_jobs` e lato-client vivono nel repo `zerrillo-gestionale`.
+
 ### Sessione 21/07/2026 — separazione repo, pulizia, messaggi WA riparatore
 
 - **Separazione dei due progetti in repo indipendenti** (vedi sezione POS sotto): il gestionale/POS è ora `zerymac/zerrillo-gestionale` (privato), estratto con `git filter-repo` dal branch `feature/gestionale-admin` (poi eliminato locale+remoto). Il worktree `~/gestionale-admin` è ora un clone standalone del nuovo repo (`.env.local` + `node_modules` preservati, `npm run build` verificato). Questo repo resta l'app riparazioni. Handoff sdoppiato: quello del POS vive in `~/gestionale-admin/HANDOFF.md`.

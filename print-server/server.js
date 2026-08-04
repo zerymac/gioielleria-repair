@@ -16,6 +16,7 @@ const fs        = require('fs');
 const path      = require('path');
 const os        = require('os');
 const { initWABot, isWAReady, sendBulkWA } = require('./wa-bot');
+const { createClient } = require('@supabase/supabase-js');
 
 const app  = express();
 const PORT = 3001;
@@ -180,6 +181,58 @@ app.post('/wa/send-bulk', (req, res) => {
 });
 
 /* ── Avvio server ─────────────────────────────────────────────────── */
+
+/* ── Coda cartellini gestionale: consuma print_jobs da Supabase ──── */
+function initPrintQueue() {
+  const url = process.env.REACT_APP_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_KEY;
+  if (!url || !key) { console.warn('⚠️  print_jobs: Supabase non configurato'); return; }
+  const supabase = createClient(url, key);
+
+  async function renderAndPrint(job) {
+    const tmpPdf = path.join(os.tmpdir(), `cartellino-${job.id}.pdf`);
+    const cleanup = () => { try { fs.unlinkSync(tmpPdf); } catch (_) {} };
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.setContent(job.html, { waitUntil: 'networkidle2', timeout: 15000 });
+      await page.pdf({ path: tmpPdf, width: `${job.width_mm}mm`, height: `${job.height_mm}mm`,
+                       printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+      await page.close();
+      const cmd = ['lp', `-d "${job.printer}"`, `-n ${job.copies || 1}`,
+                   `-o media=Custom.${job.width_mm}x${job.height_mm}mm`,
+                   `"${tmpPdf}"`].join(' ');
+      await new Promise((res, rej) => exec(cmd, (e, out, err) => { cleanup(); e ? rej(new Error(err || e.message)) : res(out); }));
+      await supabase.from('print_jobs').update({ stato: 'done', printed_at: new Date().toISOString() }).eq('id', job.id);
+      console.log(`🏷️  Cartellino stampato (${job.id})`);
+    } catch (e) {
+      cleanup();
+      await supabase.from('print_jobs').update({ stato: 'error', errore: String(e.message || e) }).eq('id', job.id);
+      console.error(`❌ Cartellino ${job.id}:`, e.message);
+    }
+  }
+
+  /* Claim atomico: pending -> printing solo se ancora pending (niente doppioni). */
+  const claim = async (id) => (await supabase.from('print_jobs')
+      .update({ stato: 'printing' }).eq('id', id).eq('stato', 'pending')
+      .select('*').maybeSingle()).data || null;
+
+  async function processPending() {
+    const { data } = await supabase.from('print_jobs').select('*')
+      .eq('stato', 'pending').order('created_at', { ascending: true });
+    for (const row of (data || [])) { const j = await claim(row.id); if (j) await renderAndPrint(j); }
+  }
+
+  supabase.channel('print-jobs')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'print_jobs' },
+        async pl => { const j = await claim(pl.new.id); if (j) await renderAndPrint(j); })
+    .subscribe(st => console.log(st === 'SUBSCRIBED' ? '📡 print_jobs — in ascolto cartellini' : `⚠️  print_jobs Realtime: ${st}`));
+
+  processPending();
+  setInterval(() => processPending().catch(() => {}), 5 * 1000);
+  console.log('🏷️  Coda cartellini attiva');
+}
+
 app.listen(PORT, '0.0.0.0', async () => {
   console.log('\n╔══════════════════════════════════════╗');
   console.log('║   🖨️  Zerrillo Print Server  v1.0    ║');
@@ -202,4 +255,7 @@ app.listen(PORT, '0.0.0.0', async () => {
 
   /* Avvia il bot WhatsApp */
   initWABot();
+
+  /* Coda cartellini gestionale (print_jobs) */
+  initPrintQueue();
 });
