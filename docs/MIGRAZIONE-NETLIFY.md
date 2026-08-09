@@ -36,7 +36,43 @@ a righe di tabella.
 
 ---
 
+## 0-bis. Fase 0 — Isolamento e sicurezza (VINCOLANTE, prima di tutto)
+
+> L'app è in produzione in negozio. Regola non negoziabile: **la produzione continua a funzionare e
+> il database attuale non corre alcun rischio.** Nessuna modifica alla produzione finché il flusso non
+> è testato su copia e approvato.
+
+### 0.1 Isolamento del codice
+- Produzione = branch **`gestionale`** (servito in LAN dal Mac). Non ci si committa nulla finché non validato.
+- Sviluppo su branch separato; su Netlify si usano **branch/preview deploy** puntati al DB di staging.
+- L'app in uso oggi resta servita dal Mac in LAN e **non viene toccata** fino al cutover.
+
+### 0.2 Isolamento del database (la "copia")
+Scegliere uno dei due (decisione al via, dipende dal piano Supabase):
+- **Progetto Supabase di staging**: secondo progetto isolato; replicare lo schema via migration e, se serve,
+  un **campione di dati reali esportati in sola lettura** per test realistici. Nessun percorso di scrittura verso produzione.
+- **Supabase Branching**: branch-DB effimero dal progetto (richiede piano Pro + integrazione git), test delle
+  migration, poi `merge` verso produzione.
+
+Tutto il testing (consumer stampa/WA, frontend) avviene **sulla copia**. La produzione riceve la migrazione solo alla fine.
+
+### 0.3 Perché la produzione è al sicuro — garanzia strutturale
+La migrazione DB (Fase A) è **puramente additiva**: solo `CREATE TABLE print_jobs/wa_jobs` + `ALTER PUBLICATION ADD TABLE`.
+- **Nessun** `ALTER`/`DROP`/`RENAME` sulle tabelle esistenti. **Nessun** `UPDATE`/`DELETE` sui dati attuali.
+- Il consumer scrive **solo** nelle tabelle nuove; legge le tabelle esistenti solo dove già lo fa `wa-bot.js` (comportamento invariato).
+- `customers`, `repairs`, `orders`, `ddts` sono quindi intoccabili per costruzione, anche all'apply in produzione.
+
+### 0.4 Rete di sicurezza prima dell'apply in produzione
+- [ ] Verificare che il **backup notturno** (`backup/backup.js`) sia funzionante e recente.
+- [ ] Verificare che il **Point-in-Time Recovery** Supabase sia attivo (o fare uno snapshot manuale pre-migrazione).
+- [ ] **Coesistenza vecchio/nuovo**: durante la transizione il Mac tiene attivi sia l'endpoint HTTP legacy sia il
+  nuovo consumer → rollback istantaneo lato stampa. Non spegnere il LaunchAgent React (app LAN) finché il flusso Netlify non è validato.
+
+---
+
 ## 1. Fase A — Supabase (schema code)
+
+> ⚠️ Eseguire prima **su staging** (Fase 0.2). Apply in produzione **solo dopo** validazione end-to-end.
 
 ### A.1 Tabella `print_jobs`
 ```sql
@@ -217,11 +253,13 @@ Mantenere verde la suite esistente (`CI=true npx react-scripts test --watchAll=f
 
 ## 8. Checklist go-live (ordine di esecuzione)
 
-1. [ ] Supabase: creare `print_jobs`, `wa_jobs`, indici, aggiungere a `supabase_realtime` (Fase A).
-2. [ ] Mac: aggiornare `print-server` con i due consumer + estrarre `printLabel` (Fase B). Deploy sul Mac, `npm install`, riavvio LaunchAgent.
-3. [ ] Verifica end-to-end in LAN: insert manuale in `print_jobs` → esce l'etichetta.
+0. [ ] **Fase 0**: predisporre ambiente di **staging** (progetto o branch Supabase) + verificare backup/PITR (Fase 0). Nulla in produzione fino al passo 9.
+1. [ ] **Su staging**: creare `print_jobs`, `wa_jobs`, indici, aggiungere a `supabase_realtime` (Fase A).
+2. [ ] Mac (puntato a **staging**): aggiornare `print-server` con i due consumer + estrarre `printLabel` (Fase B). `npm install`, avvio.
+3. [ ] Verifica end-to-end su staging: insert in `print_jobs` → esce l'etichetta; insert in `wa_jobs` → parte il WA.
 4. [ ] Frontend: patch `smartPrint` + 3 WA + rimozione UI printServerUrl (Fase C). Test suite verde.
-5. [ ] Netlify: `netlify.toml`, `_redirects`, env vars, collega repo/branch `gestionale` (Fase D).
+4b. [ ] **Apply in PRODUZIONE** della migrazione additiva (solo `CREATE TABLE` + `ALTER PUBLICATION`), dopo backup/PITR verificati (Fase 0.4).
+5. [ ] Netlify: `netlify.toml`, `_redirects`, env vars (ora → Supabase produzione), collega repo/branch `gestionale` (Fase D).
 6. [ ] Attivare protezione password sito (o gate function) (§4.4).
 7. [ ] Aggiornare `setup-autostart.sh` (Fase F).
 8. [ ] Smoke test da URL Netlify: login PIN, crea riparazione, stampa (etichetta esce dal Mac), rientro con notifica WA.
@@ -234,6 +272,8 @@ Mantenere verde la suite esistente (`CI=true npx react-scripts test --watchAll=f
 ## 9. Cosa serve da te al momento del "via"
 
 - Accesso/credenziali **Netlify** (piano a pagamento già attivo → password sito disponibile, §4.4). Serve solo la **password** da impostare per l'accesso al sito.
+- Scelta ambiente **staging** (§0.2): progetto Supabase separato **oppure** Supabase Branching (dipende dal piano).
+- Autorizzazione (opzionale) a ispezionare in **sola lettura** il progetto Supabase per consigliarti staging vs branch, verificare piano/PITR/backup.
 - Conferma se attivare l'**hardening RLS + service_role** subito (§A.4/§2.4) o restare sul minimo.
 - Eventuale **dominio personalizzato** (altrimenti si usa `*.netlify.app`).
 - Finestra di intervento sul **Mac Mini** per aggiornare il print-server e ricaricare i LaunchAgent.
