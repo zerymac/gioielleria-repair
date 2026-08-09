@@ -174,9 +174,10 @@ Sostituire i **3** `fetch(...\/wa/send-bulk...)` (`App.js:4422, 4482, 4517`) con
 
 ### 4.4 Protezione password sito (tampone sicurezza)
 - Netlify → Site settings → **Access control → Password protection** (Site protection).
-- ⚠️ **Costo**: la protezione con password a livello sito è una funzione dei piani **a pagamento**
-  (Pro/Business). Se si resta sul piano Free, alternativa: una **Netlify Function gate** con Basic Auth,
-  oppure Netlify Identity. → *Decisione da confermare al go-live in base al piano scelto.*
+- ✅ **Piano a pagamento già attivo** → la protezione password a livello sito è disponibile: si imposta
+  una singola password condivisa per l'accesso all'URL. Nessuna gate function alternativa necessaria.
+- Nota: è un tampone (una password per tutti), non un login per utente. L'auth reale resta il lavoro
+  successivo (§10).
 
 ### 4.5 Collegamento repo e deploy
 - Collegare il repo GitHub `zerymac/gioielleria-repair`.
@@ -232,7 +233,7 @@ Mantenere verde la suite esistente (`CI=true npx react-scripts test --watchAll=f
 
 ## 9. Cosa serve da te al momento del "via"
 
-- Accesso/credenziali **Netlify** (o conferma di crearne uno) e scelta del **piano** (per §4.4 password).
+- Accesso/credenziali **Netlify** (piano a pagamento già attivo → password sito disponibile, §4.4). Serve solo la **password** da impostare per l'accesso al sito.
 - Conferma se attivare l'**hardening RLS + service_role** subito (§A.4/§2.4) o restare sul minimo.
 - Eventuale **dominio personalizzato** (altrimenti si usa `*.netlify.app`).
 - Finestra di intervento sul **Mac Mini** per aggiornare il print-server e ricaricare i LaunchAgent.
