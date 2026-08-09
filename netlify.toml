@@ -1,0 +1,17 @@
+# Configurazione build Netlify per il frontend CRA.
+# Vedi docs/MIGRAZIONE-NETLIFY.md — Fase D.
+
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # CRA in CI tratta gli warning ESLint come errori: disattivare per non far fallire il build.
+  CI = "false"
+
+# SPA fallback: ogni rotta serve index.html (React gestisce il routing lato client).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

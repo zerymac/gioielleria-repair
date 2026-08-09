@@ -89,9 +89,9 @@ test("E4 — rientro rapido singolo: costi, stato, data rientro, DDT auto-chiuso
   expect(r.data_rientrata).toBe(new Date().toISOString().split("T")[0]);
   await waitFor(() => expect(__fake.db.ddts[0].stato).toBe("rientrato"));
 
-  // singola riparazione → WAToast manuale, nessuna chiamata bulk
+  // singola riparazione → WAToast manuale, nessun accodamento bulk in wa_jobs
   await screen.findByText(new RegExp(`R${anno}-0001 è pronto!`));
-  expect(global.fetch.mock.calls.find(([u]) => String(u).includes("/wa/send-bulk"))).toBeUndefined();
+  expect((__fake.db.wa_jobs || [])).toHaveLength(0);
 });
 
 test("E4/G3 — rientro rapido multiplo: WA bulk automatico con un messaggio per cliente", async () => {
@@ -109,11 +109,9 @@ test("E4/G3 — rientro rapido multiplo: WA bulk automatico con un messaggio per
   click(screen.getByText("✅ Conferma rientri"));
 
   await waitFor(() => {
-    const call = global.fetch.mock.calls.find(([u]) => String(u).includes("/wa/send-bulk"));
-    expect(call).toBeTruthy();
-    const body = JSON.parse(call[1].body);
-    expect(body.messages).toHaveLength(2);
-    expect(body.messages[0].messaggio).toMatch(/pronta per il ritiro/);
+    const jobs = __fake.db.wa_jobs || [];
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0].messaggio).toMatch(/pronta per il ritiro/);
   });
 });
 

@@ -10,12 +10,10 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const express  = require('express');
-const puppeteer = require('puppeteer');
-const { exec }  = require('child_process');
-const fs        = require('fs');
-const path      = require('path');
-const os        = require('os');
+const { createClient } = require('@supabase/supabase-js');
 const { initWABot, isWAReady, sendBulkWA } = require('./wa-bot');
+const { printLabel, getBrowser, getBrotherPrinter, BROTHER_PRINTER } = require('./print-label');
+const { startPrintConsumer } = require('./print-consumer');
 
 const app  = express();
 const PORT = 3001;
@@ -32,56 +30,8 @@ app.use((req, res, next) => {
   next();
 });
 
-/* ── Cache browser Puppeteer ──────────────────────────────────────── */
-let _browser = null;
-
-async function getBrowser() {
-  if (_browser && _browser.isConnected()) return _browser;
-  console.log('🚀 Avvio Chrome headless…');
-  _browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
-  _browser.on('disconnected', () => { _browser = null; });
-  return _browser;
-}
-
-/* ── Trova nome stampante Brother nel sistema ─────────────────────── */
-function getBrotherPrinter() {
-  return new Promise((resolve, reject) => {
-    exec('lpstat -a 2>/dev/null', (err, stdout) => {
-      const output = stdout || '';
-      const line = output.split('\n').find(l =>
-        l.toLowerCase().includes('brother') || l.toLowerCase().includes('ql')
-      );
-      if (line) {
-        /* lpstat -a restituisce "NomePrinter accepting requests since..." */
-        resolve(line.split(' ')[0].trim());
-        return;
-      }
-      /* Fallback: lpstat -p */
-      exec('lpstat -p 2>/dev/null', (e2, out2) => {
-        const line2 = (out2 || '').split('\n').find(l =>
-          l.toLowerCase().includes('brother') || l.toLowerCase().includes('ql')
-        );
-        if (line2) {
-          /* lpstat -p: "printer NomePrinter is idle..." */
-          const parts = line2.trim().split(' ');
-          resolve(parts[1] || parts[0]);
-          return;
-        }
-        reject(new Error(
-          'Stampante Brother non trovata.\n' +
-          'Esegui "lpstat -a" nel Terminale per vedere le stampanti disponibili.\n' +
-          'Poi aggiorna BROTHER_PRINTER in server.js se necessario.'
-        ));
-      });
-    });
-  });
-}
-
-/* ── Permette override manuale del nome stampante ─────────────────── */
-const BROTHER_PRINTER = process.env.BROTHER_PRINTER || "Brother_QL_1110NWB"; // es: "Brother_QL_1110NWB"
+/* getBrowser / getBrotherPrinter / BROTHER_PRINTER / printLabel sono in ./print-label
+   (condivisi tra l'endpoint HTTP legacy e il consumer della coda print_jobs). */
 
 /* ── GET /status — health check ──────────────────────────────────── */
 app.get('/status', async (req, res) => {
@@ -102,65 +52,17 @@ app.get('/status', async (req, res) => {
   }
 });
 
-/* ── POST /print — stampa etichetta ──────────────────────────────── */
+/* ── POST /print — stampa etichetta (endpoint LEGACY per uso in LAN) ──
+   Con Netlify il percorso di produzione è la coda print_jobs (vedi consumer);
+   questo endpoint resta per test/uso locale e coesistenza durante la transizione. */
 app.post('/print', async (req, res) => {
   const { html, copies = 1, width = '62mm', height = '100mm' } = req.body;
+  if (!html) return res.status(400).json({ error: 'Campo "html" mancante nel body.' });
 
-  if (!html) {
-    return res.status(400).json({ error: 'Campo "html" mancante nel body.' });
-  }
-
-  /* ── Risponde SUBITO all'iPhone per evitare timeout ── */
+  /* Risponde SUBITO per evitare timeout; stampa in background. */
   res.json({ ok: true, status: 'queued' });
-
-  /* ── Stampa in background (non blocca la risposta HTTP) ── */
-  const tmpPdf = path.join(os.tmpdir(), `zerrillo-label-${Date.now()}.pdf`);
-  const cleanup = () => { try { fs.unlinkSync(tmpPdf); } catch (_) {} };
-
-  try {
-    console.log(`📄 Generazione PDF ${width}×${height}…`);
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-
-    await page.setContent(html, {
-      waitUntil: 'networkidle2',
-      timeout: 15000,
-    });
-
-    await page.pdf({
-      path: tmpPdf,
-      width,
-      height,
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
-
-    await page.close();
-    console.log(`✅ PDF generato`);
-
-    const printer = BROTHER_PRINTER || await getBrotherPrinter();
-    console.log(`🖨️  Invio a "${printer}" (${copies} cop.)…`);
-
-    const cmd = [
-      'lp',
-      `-d "${printer}"`,
-      `-n ${copies}`,
-      `-o media=Custom.${width.replace('mm','')}x${height.replace('mm','')}mm`,
-      `-o fit-to-page`,
-      `-o print-quality=5`,
-      `"${tmpPdf}"`,
-    ].join(' ');
-
-    exec(cmd, (err, stdout, stderr) => {
-      cleanup();
-      if (err) console.error('❌ lp error:', stderr || err.message);
-      else console.log(`✅ Stampato: ${stdout.trim()}`);
-    });
-
-  } catch (e) {
-    cleanup();
-    console.error('❌ Errore stampa background:', e.message);
-  }
+  printLabel({ html, copies, width, height })
+    .catch(e => console.error('❌ Errore stampa background:', e.message));
 });
 
 /* ── GET /wa-status — stato connessione WhatsApp ─────────────────── */
@@ -200,6 +102,17 @@ app.listen(PORT, '0.0.0.0', async () => {
   /* Pre-avvia Chrome headless per ridurre latenza alla prima stampa */
   getBrowser().catch(e => console.warn('⚠️  Chrome headless:', e.message));
 
-  /* Avvia il bot WhatsApp */
+  /* Avvia il consumer della coda di stampa (percorso di produzione con Netlify) */
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.REACT_APP_SUPABASE_KEY;
+  if (supabaseUrl && supabaseKey) {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    startPrintConsumer(supabase);
+    console.log('🖨️  Consumer coda print_jobs avviato');
+  } else {
+    console.warn('⚠️  Credenziali Supabase mancanti — consumer stampa disabilitato (solo endpoint HTTP)');
+  }
+
+  /* Avvia il bot WhatsApp (include il consumer della coda wa_jobs) */
   initWABot();
 });

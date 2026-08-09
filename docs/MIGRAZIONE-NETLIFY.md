@@ -6,8 +6,32 @@
 >
 > Stato decisioni prese:
 > - **Trasporto stampa/WA**: coda su Supabase (`print_jobs` / `wa_jobs`) + consumer sul Mac. ✅
-> - **Sicurezza al go-live**: protezione password a livello sito Netlify come tampone immediato;
->   Supabase Auth + RLS ristretto come lavoro successivo separato. ✅
+> - **Sicurezza al go-live**: protezione password a livello sito Netlify (piano a pagamento attivo). ✅
+> - **Ambiente copia**: Supabase Branching. ✅
+
+---
+
+## STATO IMPLEMENTAZIONE (branch `claude/test-coverage-analysis-29qd7b`)
+
+> Codice già scritto e testato sul branch di lavoro (la produzione NON è toccata). Suite verde: 45 test.
+
+**Fatto (codice):**
+- ✅ Migration additiva `supabase/migrations/20260809224549_print_wa_jobs.sql` (`print_jobs`, `wa_jobs`, indici, Realtime).
+- ✅ `supabase/config.toml` (project_id da impostare al link).
+- ✅ `print-server/print-label.js` — logica stampa condivisa (estratta da server.js).
+- ✅ `print-server/print-consumer.js` — consumer coda `print_jobs` (subscribe + reconcile + claim + idempotenza).
+- ✅ `print-server/wa-bot.js` — aggiunto consumer coda `wa_jobs`.
+- ✅ `print-server/server.js` — avvia il consumer; `/print` e `/wa/send-bulk` restano legacy per LAN.
+- ✅ Frontend `src/App.js` — `smartPrint`→insert `print_jobs`; 3 siti WA→`enqueueWA`(insert `wa_jobs`); rimossa UI "URL server Mac Mini".
+- ✅ `netlify.toml` + `public/_redirects`.
+- ✅ `setup-autostart.sh` — React agent disattivato di default (fallback via `ENABLE_REACT_APP=1`).
+- ✅ Test: `print-consumer.test.js` (5) + `wa_jobs` in `wa-bot.test.js` (3); test WA di audit aggiornati al nuovo contratto.
+
+**Da fare (richiede le tue mani / infrastruttura):**
+- ⏳ Supabase: piano Pro + integrazione GitHub + branching abilitato; `supabase link` + `db pull` per il baseline schema (§0.2-bis).
+- ⏳ Netlify: creare il sito, env vars, password protezione, collegare repo/branch.
+- ⏳ Mac Mini: `git pull` del nuovo print-server, `npm install`, riavvio LaunchAgent.
+- ⏳ Merge su `gestionale` (cutover) dopo validazione end-to-end sul branch-DB.
 
 ---
 

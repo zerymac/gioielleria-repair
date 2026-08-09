@@ -287,14 +287,67 @@ async function startRealtimeSubscription(supabase) {
      Query per accettato_true + wa_accept_sent_at IS NULL → li processa uno a uno. */
   await reconcilePending(supabase);
 
+  /* Consumer della coda wa_jobs (bulk WA accodati dal frontend Netlify) */
+  startWaJobsConsumer(supabase);
+
   /* Rete di sicurezza: il WebSocket Realtime può cadere in silenzio senza riconnettersi
      (eventi persi finché non si riavvia). Ogni 5 min ri-scansiona i pendenti e li recupera.
      handleAccepted/handleDeclined sono idempotenti (Set waSent + wa_*_sent_at), niente doppioni. */
   if (!reconcileTimer) {
     reconcileTimer = setInterval(() => {
       reconcilePending(supabase).catch(e => console.warn('⚠️  Reconcile periodico fallito:', e.message));
+      reconcileWaJobs(supabase).catch(e => console.warn('⚠️  Reconcile wa_jobs fallito:', e.message));
     }, 5 * 60 * 1000);
   }
+}
+
+/* ── Consumer coda wa_jobs ──────────────────────────────────────────
+   Il frontend fa INSERT in wa_jobs; qui si invia con sendBulkWA (delay anti-ban)
+   e si marca lo stato. Idempotenza: claim condizionale pending -> sending. */
+const waJobsInFlight = new Set();
+
+async function processWaJob(supabase, job) {
+  if (!job || !job.id) return;
+  if (job.status && job.status !== 'pending') return;
+  if (waJobsInFlight.has(job.id)) return;
+  waJobsInFlight.add(job.id);
+  try {
+    await supabase.from('wa_jobs').update({ status: 'sending' }).eq('id', job.id).eq('status', 'pending');
+    const res = await sendBulkWA([{ telefono: job.telefono, messaggio: job.messaggio }]);
+    if (res && res.sent >= 1) {
+      await supabase.from('wa_jobs').update({ status: 'done', sent_at: new Date().toISOString() }).eq('id', job.id);
+      console.log(`✅ wa_job ${job.id} inviato`);
+    } else {
+      await supabase.from('wa_jobs').update({ status: 'error', error: 'invio fallito' }).eq('id', job.id);
+      console.warn(`⚠️  wa_job ${job.id} non inviato`);
+    }
+  } catch (e) {
+    await supabase.from('wa_jobs').update({ status: 'error', error: (e && e.message) || String(e) }).eq('id', job.id);
+    console.error(`❌ wa_job ${job.id} errore:`, e.message);
+  } finally {
+    waJobsInFlight.delete(job.id);
+  }
+}
+
+async function reconcileWaJobs(supabase) {
+  const { data } = await supabase
+    .from('wa_jobs').select('*')
+    .eq('status', 'pending').order('created_at', { ascending: true });
+  if (data && data.length) {
+    console.log(`🔁 ${data.length} wa_jobs in sospeso — invio ora`);
+    for (const job of data) await processWaJob(supabase, job);
+  }
+}
+
+function startWaJobsConsumer(supabase) {
+  supabase
+    .channel('wa-jobs')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wa_jobs' },
+      payload => { processWaJob(supabase, payload.new).catch(e => console.error('processWaJob:', e.message)); })
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') console.log('📡 Realtime wa_jobs attivo');
+    });
+  reconcileWaJobs(supabase).catch(e => console.warn('reconcile wa_jobs iniziale:', e.message));
 }
 
 async function reconcilePending(supabase) {
@@ -410,4 +463,4 @@ async function sendBulkWA(messages) {
   return { sent, failed };
 }
 
-module.exports = { initWABot, isWAReady: () => waReady, sendBulkWA };
+module.exports = { initWABot, isWAReady: () => waReady, sendBulkWA, startWaJobsConsumer, processWaJob, reconcileWaJobs };

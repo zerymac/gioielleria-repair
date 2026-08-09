@@ -1,0 +1,14 @@
+# Config Supabase CLI — necessario per migrations e Branching.
+# Il project_id va impostato al momento del link: `supabase link --project-ref <ref>`.
+# Questo file è un punto di partenza minimale; `supabase init` può rigenerarlo/estenderlo.
+
+project_id = "REPLACE_WITH_PROJECT_REF"
+
+[db]
+# Versione major di Postgres del progetto (verificare nel dashboard; 15 è il default recente).
+major_version = 15
+
+[db.migrations]
+# Le migration in supabase/migrations/ sono la sorgente di verità dello schema.
+# Al primo setup: `supabase db pull` per generare il baseline dallo schema di produzione.
+enabled = true

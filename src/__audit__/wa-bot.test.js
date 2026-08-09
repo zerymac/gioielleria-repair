@@ -1,6 +1,6 @@
 /* AUDIT — Area B/G (wa-bot): reconciliation, dedup, invii parziali, prefissi telefonici.
  * whatsapp-web.js e @supabase/supabase-js sono mockati (moduleNameMapper): nessun WA reale. */
-const { __fake } = require("./mocks/fakeSupabase");
+const { __fake, supabase } = require("./mocks/fakeSupabase");
 const { Client } = require("whatsapp-web.js");
 
 process.env.REACT_APP_SUPABASE_URL = "http://audit.fake";
@@ -99,4 +99,36 @@ test("FIX A4 — sendBulkWA rispetta i prefissi internazionali; il nazionale nud
   expect(calls[1][0]).toBe("447911123456@c.us");   // UK via 00, non 39…
   expect(calls[2][0]).toBe("393331234567@c.us");   // italiano E.164
   expect(calls[3][0]).toBe("393331234567@c.us");   // italiano nazionale
+});
+
+/* ── Consumer coda wa_jobs (bulk WA accodati dal frontend Netlify) ── */
+test("wa_jobs: un job pending viene inviato e marcato done", async () => {
+  Client.instance.sendMessage.mockClear();
+  __fake.seed("wa_jobs", [
+    { id: "w1", telefono: "+39 333 1234567", messaggio: "Ordine arrivato", status: "pending" },
+  ]);
+  await bot.reconcileWaJobs(supabase);
+
+  const calls = Client.instance.sendMessage.mock.calls.filter(([, m]) => m === "Ordine arrivato");
+  expect(calls).toHaveLength(1);
+  expect(calls[0][0]).toBe("393331234567@c.us");
+  const job = __fake.db.wa_jobs.find((j) => j.id === "w1");
+  expect(job.status).toBe("done");
+  expect(job.sent_at).toBeTruthy();
+});
+
+test("wa_jobs: fallimento invio → job marcato error", async () => {
+  __fake.seed("wa_jobs", [{ id: "w2", telefono: "+39 333 0000000", messaggio: "ko", status: "pending" }]);
+  Client.instance.sendMessage.mockImplementationOnce(async () => { throw new Error("WA down"); });
+  await bot.reconcileWaJobs(supabase);
+
+  const job = __fake.db.wa_jobs.find((j) => j.id === "w2");
+  expect(job.status).toBe("error");
+});
+
+test("wa_jobs: un job già done non viene reinviato", async () => {
+  Client.instance.sendMessage.mockClear();
+  __fake.seed("wa_jobs", [{ id: "w3", telefono: "+393331234567", messaggio: "già fatto", status: "done" }]);
+  await bot.reconcileWaJobs(supabase);
+  expect(Client.instance.sendMessage.mock.calls.filter(([, m]) => m === "già fatto")).toHaveLength(0);
 });

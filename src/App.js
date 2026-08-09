@@ -298,40 +298,43 @@ const isIOS = (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
                (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) &&
               !window.MSStream;
 
-/* ── URL print server: override esplicito da localStorage, altrimenti host corrente:3001 ── */
-const printServerBase = () => {
-  const override = (localStorage.getItem('printServerUrl') || '').trim().replace(/\/$/, '');
-  if (override) return override;
-  const host = window.location.hostname || 'localhost';
-  return `http://${host}:3001`;
-};
+/* ── Toast di conferma ── */
+function showToast(text, color = '#059669') {
+  try {
+    const toast = document.createElement('div');
+    toast.textContent = text;
+    toast.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:${color};color:white;padding:12px 24px;border-radius:20px;font-size:15px;font-weight:700;z-index:9999;font-family:-apple-system,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3)`;
+    document.body.appendChild(toast);
+    setTimeout(() => { try { document.body.removeChild(toast); } catch (_) {} }, 2500);
+  } catch (_) {}
+}
 
-/* ── Stampa intelligente: server su iOS/iPadOS, dialogo nativo su Mac ── */
-function smartPrint(html) {
-  if (isIOS) {
-    const serverUrl = localStorage.getItem('printServerUrl') || '';
-    if (!serverUrl) {
-      alert('⚠️ Server di stampa non configurato.\n\nVai in Impostazioni → Stampa e inserisci l\'IP del Mac Mini.');
-      return;
-    }
-    fetch(`${serverUrl}/print`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html }),
+/* ── Coda WhatsApp su Supabase (pattern outbox) ──
+   Il frontend accoda in wa_jobs; il consumer sul Mac invia con delay anti-ban.
+   Nessuna chiamata diretta al server locale → nessun mixed-content con Netlify (HTTPS). */
+function enqueueWA(messages) {
+  const rows = (messages || []).filter(m => m && m.telefono && m.messaggio)
+    .map(m => ({ telefono: m.telefono, messaggio: m.messaggio }));
+  if (!rows.length) return Promise.resolve();
+  return supabase.from('wa_jobs').insert(rows)
+    .then(({ error }) => {
+      if (error) console.warn('WA coda non disponibile:', error.message);
+      else console.log(`📲 ${rows.length} messaggi WA in coda`);
     })
-      .then(r => r.json())
-      .then(d => {
-        if (d.ok) {
-          const toast = document.createElement('div');
-          toast.textContent = '🖨️ Etichetta inviata!';
-          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#059669;color:white;padding:12px 24px;border-radius:20px;font-size:15px;font-weight:700;z-index:9999;font-family:-apple-system,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-          document.body.appendChild(toast);
-          setTimeout(() => document.body.removeChild(toast), 2500);
-        } else {
-          alert('❌ Errore stampa: ' + (d.error || 'sconosciuto'));
-        }
+    .catch(e => console.warn('WA coda non disponibile:', e.message));
+}
+
+/* ── Stampa intelligente: coda Supabase su iOS/iPadOS, dialogo nativo su Mac ──
+   iOS accoda in print_jobs; il consumer sul Mac genera il PDF e stampa via CUPS. */
+function smartPrint(html, opts = {}) {
+  const { copies = 1, width = '62mm', height = '100mm' } = opts;
+  if (isIOS) {
+    supabase.from('print_jobs').insert({ html, copies, width, height })
+      .then(({ error }) => {
+        if (error) { alert('❌ Impossibile mettere in coda la stampa.\n\n' + error.message); return; }
+        showToast('🖨️ Etichetta in coda');
       })
-      .catch(e => alert('❌ Impossibile raggiungere il server di stampa.\n\nVerifica che il Mac Mini sia acceso e il server attivo.\n\n' + e.message));
+      .catch(e => alert('❌ Impossibile mettere in coda la stampa.\n\n' + e.message));
   } else {
     /* Mac/desktop → dialogo di stampa nativo del browser */
     printHTML(html);
@@ -1930,29 +1933,7 @@ function SettingsPage({customers,repairs,ddts,repairers,orders=[],onRestore,onSa
   const [deleted,setDeleted]=useState([]); const [showDeleted,setShowDeleted]=useState(false);
   const [showRepairers,setShowRepairers]=useState(false);
   const [restoring,setRestoring]=useState(false); const [msg,setMsg]=useState("");
-  const [printUrl,setPrintUrl]=useState(()=>localStorage.getItem('printServerUrl')||"");
-  const [printStatus,setPrintStatus]=useState(null); const [testingPrint,setTestingPrint]=useState(false);
   const fileRef=useRef();
-
-  const savePrintUrl=(url)=>{
-    const clean=url.trim().replace(/\/$/,'');
-    setPrintUrl(clean);
-    localStorage.setItem('printServerUrl',clean);
-  };
-
-  const testPrintServer=async()=>{
-    if(!printUrl){setPrintStatus("⚠️ Inserisci l'URL del server");return;}
-    setTestingPrint(true);setPrintStatus(null);
-    try{
-      const r=await fetch(`${printUrl}/status`,{signal:AbortSignal.timeout(4000)});
-      const d=await r.json();
-      if(d.ok) setPrintStatus(`✅ Connesso · Stampante: ${d.printer||"rilevata"}`);
-      else setPrintStatus(`⚠️ Server raggiunto ma: ${d.error||"errore sconosciuto"}`);
-    }catch(e){
-      setPrintStatus(`❌ Non raggiungibile: ${e.message}`);
-    }
-    setTestingPrint(false);
-  };
 
   const loadDeleted=async()=>{setDeleted(await api.getDeletedRepairs());setShowDeleted(true);};
   const doRestore=async(id)=>{await api.restoreRepair(id);setDeleted(d=>d.filter(r=>r.id!==id));};
@@ -1962,38 +1943,14 @@ function SettingsPage({customers,repairs,ddts,repairers,orders=[],onRestore,onSa
   return (
     <div>
       {/* ── Stampa ── */}
-      <SectionTitle>🖨️ Server di stampa</SectionTitle>
+      <SectionTitle>🖨️ Stampa</SectionTitle>
       <IOSCard style={{marginBottom:12}}>
         <div style={{padding:"12px 16px"}}>
-          <div style={{fontSize:13,color:C.secondary,marginBottom:8,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:C.secondary,lineHeight:1.5}}>
             {isIOS
-              ? "iPhone usa il server sul Mac Mini per stampare con il formato corretto."
+              ? "Le etichette vengono messe in coda su Supabase; il Mac Mini le stampa automaticamente. Nessuna configurazione necessaria."
               : "Su Mac le etichette vengono stampate direttamente dal browser."}
           </div>
-          {isIOS&&<>
-            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>URL server Mac Mini</div>
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              <input
-                value={printUrl}
-                onChange={e=>setPrintUrl(e.target.value)}
-                onBlur={e=>savePrintUrl(e.target.value)}
-                placeholder="http://192.168.1.X:3001"
-                style={{flex:1,background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,fontFamily:"-apple-system,sans-serif",outline:"none"}}
-              />
-              <button onClick={()=>savePrintUrl(printUrl)} style={{background:C.blue,border:"none",borderRadius:10,padding:"10px 14px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>Salva</button>
-            </div>
-            <button onClick={testPrintServer} disabled={testingPrint} style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,color:C.label,cursor:"pointer",opacity:testingPrint?.6:1}}>
-              {testingPrint?"⏳ Verifica…":"🔍 Testa connessione"}
-            </button>
-            {printStatus&&<div style={{marginTop:8,fontSize:13,color:printStatus.startsWith("✅")?"#059669":printStatus.startsWith("⚠️")?"#B8860B":C.red,fontWeight:600}}>{printStatus}</div>}
-            <div style={{marginTop:12,background:"#F2F2F7",borderRadius:10,padding:10,fontSize:12,color:C.secondary,lineHeight:1.6}}>
-              <b>Setup Mac Mini:</b><br/>
-              1. Apri Terminale e vai nella cartella <code>print-server</code><br/>
-              2. <code>npm install</code> poi <code>node server.js</code><br/>
-              3. L'IP del Mac Mini: <b>Impostazioni → WiFi → ⓘ</b>
-            </div>
-          </>}
-          {!isIOS&&<div style={{fontSize:13,color:C.secondary}}>Accedi dall'iPhone per configurare il server remoto.</div>}
         </div>
       </IOSCard>
 
@@ -4419,9 +4376,7 @@ function MainApp() {
     await Promise.all([loadRepairs(),loadDDTs()]);
     setRientroRapido(false);
     if(bulkMessages.length>0){
-      fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:bulkMessages})})
-        .then(r=>r.json()).then(d=>console.log(`📲 WA bulk: ${d.queued} messaggi in coda`))
-        .catch(e=>console.warn("WA bulk non disponibile:",e.message));
+      enqueueWA(bulkMessages);
     }
   };
 
@@ -4479,9 +4434,7 @@ function MainApp() {
       const priceInfo=totProd>0?`\nImporto: ${totProd.toFixed(2)} €${accProd>0?`\nAcconto versato: ${accProd.toFixed(2)} €`:""}${rimProd>0?`\nRimanenza da pagare: ${rimProd.toFixed(2)} €`:""}`:""
       if(stato==="arrivato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.${priceInfo}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
-          .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
-          .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
+        enqueueWA([{telefono:waPhone(c),messaggio:msg}]);
       } else if(stato==="consegnato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna di "${nomeProd}" dell'ordine n° ${ord.numero}.${priceInfo}\n\nGrazie per aver scelto ${SHOP.nome}.`;
         setWaToast({repair:ord,customer:c,customMsg:msg,label:"📄 Articolo consegnato"});
@@ -4514,9 +4467,7 @@ function MainApp() {
       const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
       const artLines=prodotti.map(p=>`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`).join("\n");
       const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo ordine n° ${ord.numero} è arrivato ed è pronto per il ritiro:\n${artLines}${totLines}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-      fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
-        .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
-        .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
+      enqueueWA([{telefono:waPhone(c),messaggio:msg}]);
     }
   };
 
