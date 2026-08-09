@@ -47,14 +47,29 @@ a righe di tabella.
 - Sviluppo su branch separato; su Netlify si usano **branch/preview deploy** puntati al DB di staging.
 - L'app in uso oggi resta servita dal Mac in LAN e **non viene toccata** fino al cutover.
 
-### 0.2 Isolamento del database (la "copia")
-Scegliere uno dei due (decisione al via, dipende dal piano Supabase):
-- **Progetto Supabase di staging**: secondo progetto isolato; replicare lo schema via migration e, se serve,
-  un **campione di dati reali esportati in sola lettura** per test realistici. Nessun percorso di scrittura verso produzione.
-- **Supabase Branching**: branch-DB effimero dal progetto (richiede piano Pro + integrazione git), test delle
-  migration, poi `merge` verso produzione.
+### 0.2 Isolamento del database (la "copia") — SCELTO: **Supabase Branching**
+Il branch-DB effimero viene creato da git; Supabase ci applica le migration in `supabase/migrations/`,
+si testa, poi il `merge` del branch porta le migration in produzione.
 
-Tutto il testing (consumer stampa/WA, frontend) avviene **sulla copia**. La produzione riceve la migrazione solo alla fine.
+**⚠️ Prerequisito una-tantum — il repo NON è ancora branching-ready:**
+- Nessun `supabase/config.toml`, nessuna `supabase/migrations/`.
+- Lo schema attuale non è tracciato come migration (esiste solo come SQL di riferimento in `backup/backup.js`,
+  **già alla deriva** rispetto alla produzione — cfr. fallback `PGRST204` in `App.js:161`). Quindi `backup.js`
+  **non** è sorgente di verità utilizzabile.
+
+**Fase 0.2-bis — Rendere il repo branching-ready (prima di tutto):**
+1. [ ] Installare/usare la **Supabase CLI**, `supabase init` → crea `config.toml`.
+2. [ ] `supabase link` al progetto di produzione (credenziali fornite al via).
+3. [ ] **Baseline schema**: `supabase db pull` → genera `supabase/migrations/<ts>_baseline.sql` catturando lo
+   schema **reale** di produzione (tabelle, colonne, RLS, publication, function `approve-quote`). Verificare a mano il file.
+4. [ ] Commit del baseline sul branch di lavoro (NON su `gestionale` finché non validato).
+5. [ ] Nel dashboard Supabase: **piano Pro attivo** + **integrazione GitHub** collegata + **Branching abilitato**.
+   - Costo: ogni branch attivo ha un costo giornaliero (branch effimeri → si chiudono dopo il merge/uso).
+6. [ ] La migrazione additiva della Fase A diventa un nuovo file `supabase/migrations/<ts>_print_wa_jobs.sql`:
+   aprendo il branch/PR, Supabase lo applica **solo al DB-branch**; il `merge` lo porta in produzione.
+
+Tutto il testing (consumer stampa/WA, frontend puntato al branch-DB) avviene **sul branch**. La produzione
+riceve le migration **solo al merge**, e sono comunque additive (§0.3).
 
 ### 0.3 Perché la produzione è al sicuro — garanzia strutturale
 La migrazione DB (Fase A) è **puramente additiva**: solo `CREATE TABLE print_jobs/wa_jobs` + `ALTER PUBLICATION ADD TABLE`.
@@ -72,7 +87,9 @@ La migrazione DB (Fase A) è **puramente additiva**: solo `CREATE TABLE print_jo
 
 ## 1. Fase A — Supabase (schema code)
 
-> ⚠️ Eseguire prima **su staging** (Fase 0.2). Apply in produzione **solo dopo** validazione end-to-end.
+> ⚠️ Con il branching (§0.2), tutto il codice SQL qui sotto va in un unico file
+> `supabase/migrations/<ts>_print_wa_jobs.sql`. Viene applicato **automaticamente al DB-branch**
+> all'apertura del branch/PR; arriva in produzione **solo al merge**, dopo validazione end-to-end.
 
 ### A.1 Tabella `print_jobs`
 ```sql
@@ -253,12 +270,12 @@ Mantenere verde la suite esistente (`CI=true npx react-scripts test --watchAll=f
 
 ## 8. Checklist go-live (ordine di esecuzione)
 
-0. [ ] **Fase 0**: predisporre ambiente di **staging** (progetto o branch Supabase) + verificare backup/PITR (Fase 0). Nulla in produzione fino al passo 9.
-1. [ ] **Su staging**: creare `print_jobs`, `wa_jobs`, indici, aggiungere a `supabase_realtime` (Fase A).
-2. [ ] Mac (puntato a **staging**): aggiornare `print-server` con i due consumer + estrarre `printLabel` (Fase B). `npm install`, avvio.
-3. [ ] Verifica end-to-end su staging: insert in `print_jobs` → esce l'etichetta; insert in `wa_jobs` → parte il WA.
+0. [ ] **Fase 0 + 0.2-bis**: rendere il repo branching-ready (baseline schema via `db pull`, config.toml, integrazione GitHub, branching abilitato su Pro) + verificare backup/PITR. Nulla in produzione fino al passo 4b.
+1. [ ] Migration additiva `supabase/migrations/<ts>_print_wa_jobs.sql` (`print_jobs`, `wa_jobs`, indici, `supabase_realtime`) → applicata al **DB-branch** aprendo il branch/PR (Fase A).
+2. [ ] Mac (puntato al **DB-branch**): aggiornare `print-server` con i due consumer + estrarre `printLabel` (Fase B). `npm install`, avvio.
+3. [ ] Verifica end-to-end sul branch: insert in `print_jobs` → esce l'etichetta; insert in `wa_jobs` → parte il WA.
 4. [ ] Frontend: patch `smartPrint` + 3 WA + rimozione UI printServerUrl (Fase C). Test suite verde.
-4b. [ ] **Apply in PRODUZIONE** della migrazione additiva (solo `CREATE TABLE` + `ALTER PUBLICATION`), dopo backup/PITR verificati (Fase 0.4).
+4b. [ ] **Merge del branch** → Supabase applica le migration additive in **produzione** (solo `CREATE TABLE` + `ALTER PUBLICATION`), dopo backup/PITR verificati (Fase 0.4).
 5. [ ] Netlify: `netlify.toml`, `_redirects`, env vars (ora → Supabase produzione), collega repo/branch `gestionale` (Fase D).
 6. [ ] Attivare protezione password sito (o gate function) (§4.4).
 7. [ ] Aggiornare `setup-autostart.sh` (Fase F).
@@ -272,8 +289,8 @@ Mantenere verde la suite esistente (`CI=true npx react-scripts test --watchAll=f
 ## 9. Cosa serve da te al momento del "via"
 
 - Accesso/credenziali **Netlify** (piano a pagamento già attivo → password sito disponibile, §4.4). Serve solo la **password** da impostare per l'accesso al sito.
-- Scelta ambiente **staging** (§0.2): progetto Supabase separato **oppure** Supabase Branching (dipende dal piano).
-- Autorizzazione (opzionale) a ispezionare in **sola lettura** il progetto Supabase per consigliarti staging vs branch, verificare piano/PITR/backup.
+- Ambiente copia: **Supabase Branching** (scelto). Servono al via: piano **Pro** attivo, **integrazione GitHub** sul progetto Supabase, **branching abilitato**, e credenziali per `supabase link` + `db pull` (baseline schema, §0.2-bis).
+- Autorizzazione (opzionale) a ispezionare in **sola lettura** il progetto Supabase (tool MCP) per confermare piano/PITR e preparare il baseline dello schema.
 - Conferma se attivare l'**hardening RLS + service_role** subito (§A.4/§2.4) o restare sul minimo.
 - Eventuale **dominio personalizzato** (altrimenti si usa `*.netlify.app`).
 - Finestra di intervento sul **Mac Mini** per aggiornare il print-server e ricaricare i LaunchAgent.
