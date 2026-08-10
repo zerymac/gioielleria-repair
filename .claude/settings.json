@@ -10,5 +10,50 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__Supabase__list_projects",
+      "mcp__Supabase__list_organizations",
+      "mcp__Supabase__get_organization",
+      "mcp__Supabase__get_project",
+      "mcp__Supabase__get_project_url",
+      "mcp__Supabase__get_publishable_keys",
+      "mcp__Supabase__get_cost",
+      "mcp__Supabase__get_advisors",
+      "mcp__Supabase__list_tables",
+      "mcp__Supabase__list_migrations",
+      "mcp__Supabase__list_branches",
+      "mcp__Supabase__list_extensions",
+      "mcp__Supabase__list_edge_functions",
+      "mcp__Supabase__get_edge_function",
+      "mcp__Supabase__search_docs",
+      "mcp__Netlify__netlify-user-services-reader",
+      "mcp__Netlify__netlify-team-services-reader",
+      "mcp__Netlify__netlify-project-services-reader",
+      "mcp__Netlify__netlify-deploy-services-reader",
+      "mcp__Netlify__netlify-extension-services-reader",
+      "mcp__Netlify__get-netlify-coding-context",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_projects",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_organizations",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_organization",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_project",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_project_url",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_publishable_keys",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_cost",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_advisors",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_tables",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_migrations",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_branches",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_extensions",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__list_edge_functions",
+      "mcp__6adb8ffc-2e7c-4db9-8aae-ef16cedb49e0__get_edge_function",
+      "mcp__a5833481-3425-46b9-a2c7-af2e13025616__netlify-user-services-reader",
+      "mcp__a5833481-3425-46b9-a2c7-af2e13025616__netlify-team-services-reader",
+      "mcp__a5833481-3425-46b9-a2c7-af2e13025616__netlify-project-services-reader",
+      "mcp__a5833481-3425-46b9-a2c7-af2e13025616__netlify-deploy-services-reader",
+      "mcp__a5833481-3425-46b9-a2c7-af2e13025616__netlify-extension-services-reader",
+      "mcp__a5833481-3425-46b9-a2c7-af2e13025616__get-netlify-coding-context"
+    ]
   }
 }
