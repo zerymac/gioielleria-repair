@@ -189,7 +189,33 @@ function initPrintQueue() {
   if (!url || !key) { console.warn('⚠️  print_jobs: Supabase non configurato'); return; }
   const supabase = createClient(url, key);
 
+  /* Ricevute di cortesia / scontrini regalo sulla Epson FP-81 II RT: il job
+     porta l'XML gia' pronto (envelope SOAP generato dal gestionale, vedi
+     gestionale-web/src/lib/epsonPrinter.ts) e qui si fa solo il POST a
+     fpmate.cgi — dal server sulla LAN, cosi' il browser (anche iPhone) non e'
+     bloccato dal mixed-content. Richiede Node 18+ (fetch globale). */
+  const EPSON_FP_URL = (process.env.EPSON_FP_URL || 'http://192.168.1.65').replace(/\/+$/, '');
+  async function printEpsonReceipt(job) {
+    try {
+      const res = await fetch(`${EPSON_FP_URL}/cgi-bin/fpmate.cgi?devid=local_printer&timeout=10000`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+        body: job.html,
+      });
+      const text = await res.text().catch(() => '');
+      if (!res.ok || !/success\s*=\s*"true"/i.test(text)) {
+        throw new Error(`Epson ${res.status}: ${text.replace(/\s+/g, ' ').slice(0, 200)}`);
+      }
+      await supabase.from('print_jobs').update({ stato: 'done', printed_at: new Date().toISOString() }).eq('id', job.id);
+      console.log(`🧾 Ricevuta Epson stampata (${job.id})`);
+    } catch (e) {
+      await supabase.from('print_jobs').update({ stato: 'error', errore: String(e.message || e) }).eq('id', job.id);
+      console.error(`❌ Ricevuta Epson ${job.id}:`, e.message);
+    }
+  }
+
   async function renderAndPrint(job) {
+    if (job.tipo === 'ricevuta_epson') return printEpsonReceipt(job);
     const tmpPdf = path.join(os.tmpdir(), `cartellino-${job.id}.pdf`);
     const cleanup = () => { try { fs.unlinkSync(tmpPdf); } catch (_) {} };
     try {
