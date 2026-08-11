@@ -123,8 +123,11 @@ app.post('/print', async (req, res) => {
     const browser = await getBrowser();
     const page = await browser.newPage();
 
+    /* 'load' e non 'networkidle2': l'HTML delle etichette e' autonomo (QR come
+       SVG inline, niente risorse esterne) e networkidle2 aggiungeva ~500-700ms
+       di attesa fissa a ogni stampa. */
     await page.setContent(html, {
-      waitUntil: 'networkidle2',
+      waitUntil: 'load',
       timeout: 15000,
     });
 
@@ -221,7 +224,9 @@ function initPrintQueue() {
     try {
       const browser = await getBrowser();
       const page = await browser.newPage();
-      await page.setContent(job.html, { waitUntil: 'networkidle2', timeout: 15000 });
+      /* 'load': come sopra, l'HTML dei cartellini e' autonomo — networkidle2
+         costava ~500-700ms fissi in piu' per etichetta. */
+      await page.setContent(job.html, { waitUntil: 'load', timeout: 15000 });
       await page.pdf({ path: tmpPdf, width: `${job.width_mm}mm`, height: `${job.height_mm}mm`,
                        printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
       await page.close();
@@ -255,7 +260,9 @@ function initPrintQueue() {
     .subscribe(st => console.log(st === 'SUBSCRIBED' ? '📡 print_jobs — in ascolto cartellini' : `⚠️  print_jobs Realtime: ${st}`));
 
   processPending();
-  setInterval(() => processPending().catch(() => {}), 5 * 1000);
+  /* 2s (era 5s): e' la rete di sicurezza quando Realtime non consegna
+     l'INSERT — piu' fitto = attesa peggiore piu' corta, costo trascurabile. */
+  setInterval(() => processPending().catch(() => {}), 2 * 1000);
   console.log('🏷️  Coda cartellini attiva');
 }
 
