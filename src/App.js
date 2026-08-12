@@ -165,7 +165,7 @@ const api = {
   async softDeleteRepair(id) { const {error}=await supabase.from("repairs").update({eliminata:true}).eq("id",id); _noteWriteErr(error); },
   async restoreRepair(id) { await supabase.from("repairs").update({eliminata:false}).eq("id",id); },
   async updateRepairStatus(id,status) { const {error}=await supabase.from("repairs").update({status}).eq("id",id); _noteWriteErr(error); },
-  async updateRepairReturn(id,fields) { const {error}=await supabase.from("repairs").update({ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }).eq("id",id); _noteWriteErr(error); },
+  async updateRepairReturn(id,fields) { const payload={ status:fields.status, spesa:fields.spesa, prezzo_finale:fields.prezzoFinale, preventivo:fields.prezzoFinale||fields.preventivo, data_rientrata:fields.dataRientrata||null }; if(fields.ddtFornitore)payload.ddt_fornitore=fields.ddtFornitore; const {error}=await supabase.from("repairs").update(payload).eq("id",id); _noteWriteErr(error); },
   async getDDTs() { const {data,error}=await supabase.from("ddts").select("*").order("created_at",{ascending:false}); if(error)return {data:[],error}; return {data:(data||[]).map(toDDT),error:null}; },
   async upsertDDT(d) { const {error}=await supabase.from("ddts").upsert({ id:d.id, numero:d.numero, data:d.data, riparatore:d.riparatore, riparazioni_ids:d.riparazioniIds, stato:d.stato, data_rientro:d.dataRientro, ddt_rientro_numero:d.ddtRientroNumero||null, note:d.note }); _noteWriteErr(error); },
   async createQuoteToken(repairId) { const token=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})(); const {error}=await supabase.from("quote_tokens").insert({token,repair_id:repairId}); if(error){console.error("quote_tokens insert error:",error);throw new Error(error.message);} return token; },
@@ -4388,7 +4388,7 @@ function MainApp() {
       for(const id of selectedIds){
         const fi=costs[id];if(!fi)continue;
         const spesa=parseFloat(fi.spesa)||null;const fin=parseFloat(fi.prezzoFinale)||null;
-        await api.updateRepairReturn(id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:fin,preventivo:fin||repairs.find(r=>r.id===id)?.preventivo,dataRientrata});
+        await api.updateRepairReturn(id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:fin,preventivo:fin||repairs.find(r=>r.id===id)?.preventivo,dataRientrata,ddtFornitore:rientroInfo?.ddtRientroNumero||null});
         const repUpd=repairs.find(r=>r.id===id);
         const custUpd=repUpd?customers.find(c=>c.id===repUpd.customerId):null;
         if(fi.nuovoStato==="pronto"&&custUpd?.telefono){
@@ -4607,7 +4607,7 @@ function MainApp() {
         const fi=costs[r.id];if(!fi)continue;
         const spesa=parseFloat(fi.spesa)||null;const fin=parseFloat(fi.prezzoFinale)||null;
         const isReso=fi.nuovoStato==="reso_non_riparato";
-        await api.updateRepairReturn(r.id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:isReso?null:fin,preventivo:isReso?r.preventivo:fin||r.preventivo,dataRientrata});
+        await api.updateRepairReturn(r.id,{status:fi.nuovoStato||"pronto",spesa,prezzoFinale:isReso?null:fin,preventivo:isReso?r.preventivo:fin||r.preventivo,dataRientrata,ddtFornitore:rientroInfo?.ddtRientroNumero||null});
         const cust=customers.find(c=>c.id===r.customerId);
         if(fi.nuovoStato==="pronto"){if(cust?.telefono)setWaToast({repair:{...r,prezzoFinale:fin??r.prezzoFinale},customer:cust});}
         if(fi.nuovoStato==="reso_non_riparato"&&cust?.telefono){const causale=fi.causale?.trim()||"";const msg=`Gentile ${cust.nome} ${cust.cognome},\nla informiamo che la sua riparazione n° ${r.numero} (${r.descrizione}) ci è stata restituita senza essere riparata.${causale?`\n\nMotivo: ${causale}`:""}\n\nL'oggetto è disponibile per il ritiro.\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;setWaToast({repair:r,customer:cust,customMsg:msg,label:"💬 Avvisa cliente"});}
