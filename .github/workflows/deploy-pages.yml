@@ -32,11 +32,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  # Job separato SENZA `environment:`: se Pages e' disattivato l'ambiente
+  # `github-pages` non esiste ancora e un job che lo dichiara fallisce prima
+  # di eseguire qualsiasi step (chicken-and-egg). Qui Pages viene riattivato,
+  # poi il job `deploy` puo' usare l'ambiente appena creato.
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,6 +52,13 @@ jobs:
         with:
           path: docs
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
