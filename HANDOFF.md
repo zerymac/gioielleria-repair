@@ -5,6 +5,14 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Sessione 28/08/2026 — link preventivo/stato in 404: GitHub Pages disattivato
+
+- **Sintomo**: il link di conferma preventivo inviato ai clienti via WhatsApp (`https://zerymac.github.io/gioielleria-repair/...`) rispondeva **404**. Verificato: 404 su `repair-status.html`, su `approve-quote.html` e sulla root del sito.
+- **Causa**: Pages era configurato in modalita' "deploy from a branch" sul branch **`gestionale`**, cartella `/docs`. Con il passaggio a `main` quel branch non esiste piu' → GitHub ha **disattivato Pages** (`has_pages: false` sull'API) e ogni URL del sito da' 404. Nessun bug nel codice dell'app: i link generati in `src/App.js` sono corretti.
+- **Fix**: aggiunto `.github/workflows/deploy-pages.yml` — pubblica `docs/` su Pages a ogni push su `main` (piu' `workflow_dispatch` manuale), con `actions/configure-pages@v5` + `enablement: true` per **riattivare Pages da solo** al primo run. Il sito non dipende piu' dal nome del branch.
+- **In alternativa (senza workflow)**: Settings > Pages > Source = "Deploy from a branch" > `main` + `/docs`.
+- **⚠️ Secondo blocco, ancora aperto**: `supabase/sql/fase1-public-rpc.sql` **non e' mai stato applicato** su Supabase — verificato chiamando le RPC dalla chiave publishable: `get_quote` e `get_repair_status` rispondono `PGRST202 / Could not find the function`. Le pagine `docs/*.html` sono gia' quelle riscritte "solo RPC", quindi anche a Pages riattivato mostrerebbero *"Link non valido o scaduto"*. **Ordine corretto: 1) applicare l'SQL su Supabase, 2) riattivare Pages, 3) test end-to-end su un link vero.**
+
 ### Sessione 04/08/2026 — documentata e committata la coda cartellini `print_jobs` (era live ma non tracciata)
 
 - **Scoperta**: `git status` mostrava `print-server/server.js` modificato (non committato) + un backup `server.js.bak-20260723-174608` non tracciato, **entrambi non documentati** in questo handoff (l'ultima entry era del 21/07). Il `.bak` era identico alla versione committata (HEAD): backup dell'originale preso alle 17:46 del 23/07, subito prima dell'edit delle 18:04.
@@ -20,7 +28,7 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 ### Sessione 21/07/2026 — separazione repo, pulizia, messaggi WA riparatore
 
 - **Separazione dei due progetti in repo indipendenti** (vedi sezione POS sotto): il gestionale/POS è ora `zerymac/zerrillo-gestionale` (privato), estratto con `git filter-repo` dal branch `feature/gestionale-admin` (poi eliminato locale+remoto). Il worktree `~/gestionale-admin` è ora un clone standalone del nuovo repo (`.env.local` + `node_modules` preservati, `npm run build` verificato). Questo repo resta l'app riparazioni. Handoff sdoppiato: quello del POS vive in `~/gestionale-admin/HANDOFF.md`.
-- **Regola confermata dal proprietario**: l'app riparazioni è **produzione intoccabile** — mai `push`/deploy/applicazione SQL/riavvio servizi senza conferma esplicita; commit in locale è sicuro (non deploya). GitHub Pages serve `docs/` dal **tip di `gestionale`**, quindi pushare pubblica subito.
+- **Regola confermata dal proprietario**: l'app riparazioni è **produzione intoccabile** — mai `push`/deploy/applicazione SQL/riavvio servizi senza conferma esplicita; commit in locale è sicuro (non deploya). GitHub Pages serve `docs/` tramite il workflow `deploy-pages.yml` a ogni push su `main`, quindi pushare pubblica subito.
 - **Fase 1 sicurezza — COMMITTATA (non pushata/applicata)**: i 4 file Fase 1 finora non committati sono ora su `gestionale` in 3 commit (`1ac5ecf` SQL+runbook, `fee07b0` service_role fallback wa-bot/backup, `69dcb0a` pagine pubbliche via RPC) + `caea994` handoff. ⚠️ Non pushare finché `fase1-public-rpc.sql` non è applicato su Supabase (le pagine `docs/*.html` riscritte a RPC si romperebbero). Dettagli nella sezione "Sicurezza — Fase 1".
 - **Correzione stato**: `src/App.js` è **pulito** (ultimo commit `5a0dd4a`). I "filtri preventivo" e "costi DDT fornitore" segnati come *NON committato* nelle sezioni sotto erano in realtà **già committati** in `5a0dd4a` — quelle note sono storiche.
 - **Pulizia repo**: rimosso il worktree stantìo `~/gioielleria-audit` (sandbox audit di luglio, ~570 MB) ed eliminati i 3 branch già mergiati in `gestionale` (`fix/stato-ordine-wa`, `fix/perdite-dati`, `audit/verifica`; erano solo locali). La suite test `src/__audit__/` resta comunque nel repo principale.
@@ -325,7 +333,7 @@ Audit tecnico completo (`AUDIT_REPORT.md`, `audit/FASE1-ANALISI.md`, `audit/FASE
   - QR code sulle etichette punta a `repair-status.html?token=XXX&n=NUMERO` (scanner interni funzionano ancora: trovano `R\d{4}-\d{4}` nell'URL)
   - Pagina mostra stato con badge colorato + dettagli riparazione
   - Se preventivo in attesa e `quote_token` valido → mostra pulsanti accetta/rifiuta
-  - Hosted su GitHub Pages, branch `gestionale`, cartella `/docs`
+  - Hosted su GitHub Pages, workflow `.github/workflows/deploy-pages.yml` (pubblica `docs/` a ogni push su `main`)
   - Migrazione eseguita: `alter table public.repairs add column if not exists link_token text;`
   - `crypto.randomUUID()` usato con try/catch per compatibilità localhost e iPhone via IP
 
@@ -473,8 +481,8 @@ alter table public.repairers add column if not exists cap text;
 ## Pagina stato riparazione — Note operative
 - **URL pubblico**: `https://zerymac.github.io/gioielleria-repair/repair-status.html?token=XXX`
 - **File**: `docs/repair-status.html` — pagina statica, nessun server necessario
-- **Hosting**: GitHub Pages, branch `gestionale`, cartella `/docs`
-- **Per aggiornare**: modificare `docs/repair-status.html`, commit e push su `gestionale`
+- **Hosting**: GitHub Pages via GitHub Actions (`.github/workflows/deploy-pages.yml`), sorgente `docs/`
+- **Per aggiornare**: modificare `docs/repair-status.html`, commit e push su `main` → il workflow ripubblica da solo
 - `approve-quote.html` resta come fallback per riparazioni vecchie senza `link_token`
 
 ## Gestionale — Pianificazione futura

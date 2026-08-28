@@ -1,0 +1,56 @@
+# Pubblica le pagine pubbliche (docs/) su GitHub Pages.
+#
+# Perche' esiste: Pages era configurato come "deploy from a branch" sul branch
+# `gestionale`, cartella /docs. Rinominato/eliminato quel branch, GitHub ha
+# disattivato Pages e TUTTI i link inviati ai clienti
+# (repair-status.html / approve-quote.html) hanno iniziato a dare 404.
+# Con questo workflow il sito non dipende piu' dal nome del branch: si
+# ripubblica da solo a ogni push su `main` che tocca docs/.
+#
+# `enablement: true` riattiva Pages via API al primo run. Se il run fallisce
+# con 403 su quello step, basta aprire una volta
+# Settings > Pages e scegliere Source = "GitHub Actions", poi ri-lanciare
+# il workflow da Actions > "Deploy pagine pubbliche (GitHub Pages)" > Run workflow.
+name: Deploy pagine pubbliche (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un deploy alla volta; non annullare quelli gia' in corso.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura Pages (attiva se disattivato)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Carica la cartella docs/
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
