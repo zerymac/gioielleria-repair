@@ -7,10 +7,13 @@
 # Con questo workflow il sito non dipende piu' dal nome del branch: si
 # ripubblica da solo a ogni push su `main` che tocca docs/.
 #
-# `enablement: true` riattiva Pages via API al primo run. Se il run fallisce
-# con 403 su quello step, basta aprire una volta
-# Settings > Pages e scegliere Source = "GitHub Actions", poi ri-lanciare
-# il workflow da Actions > "Deploy pagine pubbliche (GitHub Pages)" > Run workflow.
+# SETUP UNA TANTUM (gia' fatto? allora non serve nulla): Settings > Pages >
+# Source = "GitHub Actions". Il GITHUB_TOKEN di Actions NON puo' creare il
+# sito Pages da solo (`configure-pages` con `enablement: true` risponde
+# "Resource not accessible by integration"): la creazione del sito richiede
+# i permessi di admin del repo, quindi va fatta una volta dall'interfaccia.
+# Da li' in poi ogni push su main che tocca docs/ ripubblica da solo, e il
+# deploy non dipende piu' dal nome del branch.
 name: Deploy pagine pubbliche (GitHub Pages)
 
 on:
@@ -32,20 +35,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Job separato SENZA `environment:`: se Pages e' disattivato l'ambiente
-  # `github-pages` non esiste ancora e un job che lo dichiara fallisce prima
-  # di eseguire qualsiasi step (chicken-and-egg). Qui Pages viene riattivato,
-  # poi il job `deploy` puo' usare l'ambiente appena creato.
+  # Job separato SENZA `environment:`: finche' Pages e' disattivato l'ambiente
+  # `github-pages` non esiste e un job che lo dichiara fallisce prima ancora di
+  # eseguire uno step. Tenendo il build separato, l'artifact viene comunque
+  # prodotto e in caso di setup mancante fallisce solo il deploy, con un errore
+  # leggibile.
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configura Pages (attiva se disattivato)
+      - name: Configura Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Carica la cartella docs/
         uses: actions/upload-pages-artifact@v3
