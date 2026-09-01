@@ -3282,7 +3282,7 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
 
       {/* ── STEP 1: Selezione ── */}
       {step===1&&<div>
-        <div style={{fontSize:15,color:C.secondary,marginBottom:16}}>Seleziona le riparazioni rientrate dal fornitore. Puoi scansionare il QR o spuntarle dalla lista.</div>
+        <div style={{fontSize:15,color:C.secondary,marginBottom:16}}>Seleziona le riparazioni rientrate dal fornitore. Puoi scansionare il QR o spuntarle dalla lista, e inserire subito spesa e prezzo finale.</div>
 
         {/* Scan QR */}
         <div style={{background:"#F5F3FF",borderRadius:16,padding:14,marginBottom:16,border:"1px solid #DDD6FE"}}>
@@ -3312,19 +3312,33 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {g.repairs.map(r=>{
                   const c=customers.find(x=>x.id===r.customerId);const sel=selected.includes(r.id);
+                  const fi=costs[r.id]||{spesa:"",prezzoFinale:""};
                   return(
-                    <button key={r.id} onClick={()=>toggle(r.id)} style={{background:sel?"#F5F3FF":C.white,border:sel?"2px solid "+C.purple:"2px solid transparent",borderRadius:16,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",width:"100%",boxShadow:sel?"none":"0 1px 3px rgba(0,0,0,.07)"}}>
-                      <div style={{width:28,height:28,borderRadius:14,border:"2px solid "+(sel?C.purple:"#C7C7CC"),background:sel?C.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        {sel&&<span style={{color:"white",fontSize:14,fontWeight:700}}>✓</span>}
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",gap:8,marginBottom:3,alignItems:"center"}}>
-                          <span style={{fontSize:14,fontWeight:700,color:C.label}}>{r.numero}</span>
-                          {r.richiestaPreventivo&&<span style={{fontSize:11,color:C.purple,fontWeight:600}}>⏳ prev.</span>}
+                    <div key={r.id} style={{background:sel?"#F5F3FF":C.white,border:sel?"2px solid "+C.purple:"2px solid transparent",borderRadius:16,boxShadow:sel?"none":"0 1px 3px rgba(0,0,0,.07)"}}>
+                      <button onClick={()=>toggle(r.id)} style={{background:"transparent",border:"none",padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",width:"100%"}}>
+                        <div style={{width:28,height:28,borderRadius:14,border:"2px solid "+(sel?C.purple:"#C7C7CC"),background:sel?C.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          {sel&&<span style={{color:"white",fontSize:14,fontWeight:700}}>✓</span>}
                         </div>
-                        <div style={{fontSize:13,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descrizione}{c?" · "+c.cognome:""}</div>
-                      </div>
-                    </button>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",gap:8,marginBottom:3,alignItems:"center"}}>
+                            <span style={{fontSize:14,fontWeight:700,color:C.label}}>{r.numero}</span>
+                            {r.richiestaPreventivo&&<span style={{fontSize:11,color:C.purple,fontWeight:600}}>⏳ prev.</span>}
+                          </div>
+                          <div style={{fontSize:13,color:C.secondary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descrizione}{c?" · "+c.cognome:""}</div>
+                        </div>
+                      </button>
+                      {sel&&(
+                        <div style={{padding:"0 14px 12px 14px"}}>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                            <IOSInput label="Spesa fornitore (€)" type="number" placeholder="0.00" value={fi.spesa||""} onChange={e=>setF(r.id,"spesa",e.target.value)}/>
+                            <IOSInput label="Prezzo finale (€)" type="number" placeholder="0.00" value={fi.prezzoFinale||""} onChange={e=>setF(r.id,"prezzoFinale",e.target.value)}/>
+                          </div>
+                          {fi.spesa&&fi.prezzoFinale&&parseFloat(fi.prezzoFinale)>parseFloat(fi.spesa)&&(
+                            <div style={{background:"#ECFDF5",borderRadius:12,padding:"6px 12px",marginTop:8,border:"1px solid #BBF7D0",fontSize:12,color:"#059669"}}>Margine: {(parseFloat(fi.prezzoFinale)-parseFloat(fi.spesa)).toFixed(2)} €</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
