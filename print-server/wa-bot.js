@@ -329,12 +329,85 @@ async function reconcilePending(supabase) {
   }
 }
 
+/* ── Coda wa_jobs: messaggi accodati dal GESTIONALE (migration 137) ──
+   Le wishlist di negozio (e in futuro qualunque messaggio dal numero del
+   negozio) non partono dal browser: il gestionale scrive una riga in wa_jobs
+   e la manda questo bot, che e' l'unico autenticato col numero del negozio.
+   Stesso schema della coda cartellini in server.js: claim atomico
+   pending→sending (niente doppioni fra Realtime e riconciliazione), poi
+   sent/error. I job rimasti in 'sending' da piu' di 15 minuti sono invii
+   interrotti da un crash: si marcano error — MAI rimandarli da soli, il
+   messaggio potrebbe essere gia' partito. Si rimandano dal gestionale. */
+let waJobsStarted = false
+
+function initWaJobsQueue(supabase) {
+  if (waJobsStarted) return
+  waJobsStarted = true
+
+  const claim = async (id) => (await supabase.from('wa_jobs')
+    .update({ stato: 'sending' }).eq('id', id).eq('stato', 'pending')
+    .select('*').maybeSingle()).data || null
+
+  async function sendJob(job) {
+    const phone = formatPhone(job.telefono)
+    if (!phone) {
+      await supabase.from('wa_jobs').update({ stato: 'error', errore: `Telefono non valido: ${job.telefono}` }).eq('id', job.id)
+      console.warn(`⚠️  wa_jobs ${job.id}: telefono non valido (${job.telefono})`)
+      return
+    }
+    try {
+      await waDelay()
+      await waClient.sendMessage(phone, job.messaggio)
+      await supabase.from('wa_jobs').update({ stato: 'sent', sent_at: new Date().toISOString(), errore: null }).eq('id', job.id)
+      console.log(`✅ wa_jobs ${job.tipo} inviato a ${job.telefono}`)
+    } catch (e) {
+      await supabase.from('wa_jobs').update({ stato: 'error', errore: String(e.message || e) }).eq('id', job.id)
+      console.error(`❌ wa_jobs ${job.id}:`, e.message)
+    }
+  }
+
+  async function processPending() {
+    if (!waReady) return
+    const { data } = await supabase.from('wa_jobs').select('id')
+      .eq('stato', 'pending').order('created_at', { ascending: true }).limit(20)
+    for (const row of (data || [])) {
+      const job = await claim(row.id)
+      if (job) await sendJob(job)
+    }
+  }
+
+  async function marcaInterrotti() {
+    const limite = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    const { data } = await supabase.from('wa_jobs')
+      .update({ stato: 'error', errore: 'Invio interrotto (riavvio del print server): rimandare dal gestionale se non è arrivato' })
+      .eq('stato', 'sending').lt('created_at', limite).select('id')
+    if (data?.length) console.warn(`⚠️  wa_jobs: ${data.length} invii interrotti marcati in errore`)
+  }
+
+  supabase.channel('wa-jobs')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wa_jobs' }, async pl => {
+      if (!waReady) return
+      const job = await claim(pl.new.id)
+      if (job) await sendJob(job)
+    })
+    .subscribe(st => console.log(st === 'SUBSCRIBED' ? '📡 wa_jobs — in ascolto messaggi dal gestionale' : `⚠️  wa_jobs Realtime: ${st}`))
+
+  marcaInterrotti().catch(() => {})
+  processPending().catch(() => {})
+  /* Rete di sicurezza quando Realtime non consegna l'INSERT. 60s bastano:
+     non e' una stampa da banco, il cliente non sta aspettando davanti. */
+  setInterval(() => processPending().catch(e => console.warn('⚠️  wa_jobs reconcile:', e.message)), 60 * 1000)
+  console.log('📬 Coda wa_jobs attiva')
+}
+
 /* ── Inizializza il client WhatsApp ── */
 function initWABot() {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  // Fase 1: usa la service_role se presente (bypassa RLS, resiste al lockdown
-  // anon della Fase 2); fallback alla chiave anon finché la service non è nel .env.
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_KEY;
+  // Usa la Secret key (o la service_role legacy) se presente: bypassa RLS,
+  // resiste al lockdown anon e serve alla coda wa_jobs, che ad anon è chiusa.
+  // Fallback alla chiave anon solo se nel .env non c'è nessuna delle due
+  // (le notifiche riparazioni funzionano comunque: repairs è ALL TO public).
+  const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.warn('⚠️  Credenziali Supabase mancanti nel .env — WA bot disabilitato');
@@ -369,6 +442,8 @@ function initWABot() {
       realtimeStarted = true;
       await startRealtimeSubscription(supabase);
     }
+    /* Coda messaggi del gestionale (wishlist e simili, migration 137) */
+    initWaJobsQueue(supabase);
   });
 
   waClient.on('auth_failure', msg => {
