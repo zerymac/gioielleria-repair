@@ -204,10 +204,13 @@ async function main() {
   log("Connessione a Supabase…");
   const env = loadEnv();
   const url = env.REACT_APP_SUPABASE_URL;
-  // Fase 1: preferisci la service_role (bypassa RLS, resiste al lockdown anon
-  // della Fase 2); fallback alla chiave anon finché la service non è nel .env.
-  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.REACT_APP_SUPABASE_KEY;
-  if (!url || !key) throw new Error("REACT_APP_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY mancanti nel .env");
+  // Chiave segreta (bypassa RLS): obbligatoria dopo il lockdown anon della
+  // Fase 2, con la chiave publishable il backup leggerebbe tabelle vuote.
+  // Stessa cascata del print server: SUPABASE_SECRET_KEY (nome nuovo) →
+  // SUPABASE_SERVICE_ROLE_KEY (nome legacy) → publishable (solo pre-lockdown).
+  const key = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.REACT_APP_SUPABASE_KEY;
+  if (!url || !key) throw new Error("REACT_APP_SUPABASE_URL o SUPABASE_SECRET_KEY mancanti nel .env");
+  if (key === env.REACT_APP_SUPABASE_KEY) log("⚠️  Backup con chiave publishable: dopo il lockdown anon salverebbe tabelle VUOTE. Aggiungi SUPABASE_SECRET_KEY al .env");
 
   const supabase = createClient(url, key);
   const dbBackup = { version: 2, date: new Date().toISOString() };
