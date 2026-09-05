@@ -9,8 +9,10 @@ export const seedBase = () => {
   ]);
 };
 
+/** Login Supabase finto (fakeSupabase: password valida = "test"). */
 export async function unlockAndLoad() {
-  fireEvent.change(screen.getByPlaceholderText("PIN di accesso"), { target: { value: "1234" } });
+  fireEvent.change(await screen.findByPlaceholderText("Email"), { target: { value: "op@test.it" } });
+  fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "test" } });
   fireEvent.click(screen.getByText("Entra"));
   await screen.findByText("Repair Manager");
 }

@@ -147,20 +147,21 @@ alter table public.repairers    enable row level security;
 alter table public.orders       enable row level security;
 alter table public.quote_tokens enable row level security;
 
--- Policy: accesso completo con la chiave anon (app locale, non esposta a internet)
+-- Policy: solo operatori loggati (authenticated). L'app è online: anon NON deve
+-- leggere/scrivere l'anagrafica (vedi supabase/sql/fase2-lockdown-online.sql).
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename='customers'    and policyname='anon_all') then
-    create policy anon_all on public.customers    for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='repairs'      and policyname='anon_all') then
-    create policy anon_all on public.repairs      for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='ddts'         and policyname='anon_all') then
-    create policy anon_all on public.ddts         for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='repairers'    and policyname='anon_all') then
-    create policy anon_all on public.repairers    for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='orders'       and policyname='anon_all') then
-    create policy anon_all on public.orders       for all to anon using (true) with check (true); end if;
-  if not exists (select 1 from pg_policies where tablename='quote_tokens' and policyname='anon_all') then
-    create policy anon_all on public.quote_tokens for all to anon using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='customers'    and policyname='authenticated_all') then
+    create policy authenticated_all on public.customers    for all to authenticated using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='repairs'      and policyname='authenticated_all') then
+    create policy authenticated_all on public.repairs      for all to authenticated using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='ddts'         and policyname='authenticated_all') then
+    create policy authenticated_all on public.ddts         for all to authenticated using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='repairers'    and policyname='authenticated_all') then
+    create policy authenticated_all on public.repairers    for all to authenticated using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='orders'       and policyname='authenticated_all') then
+    create policy authenticated_all on public.orders       for all to authenticated using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where tablename='quote_tokens' and policyname='authenticated_all') then
+    create policy authenticated_all on public.quote_tokens for all to authenticated using (true) with check (true); end if;
 end $$;
 `;
 

@@ -207,13 +207,23 @@ const api = {
 };
 
 /* ── AI ── */
+/* La chiave Anthropic NON sta più nel bundle del browser (l'app è online):
+   la chiamata passa dalla Netlify Function /.netlify/functions/ai, che
+   verifica il login Supabase e parla con l'API. In `npm start` lo stesso URL
+   è servito da src/setupProxy.js. */
 async function aiCall(prompt,b64=null,mt="image/jpeg") {
-  const key=process.env.REACT_APP_ANTHROPIC_KEY;
-  if(!key||key==="placeholder") return "";
-  const content=b64?[{type:"image",source:{type:"base64",media_type:mt,data:b64}},{type:"text",text:prompt}]:prompt;
-  try { const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content}]})}); return (await r.json()).content?.[0]?.text||""; } catch { return ""; }
+  try {
+    const {data}=await supabase.auth.getSession();
+    const token=data?.session?.access_token;
+    if(!token) return "";
+    const r=await fetch("/.netlify/functions/ai",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},body:JSON.stringify({prompt,b64,mt})});
+    if(!r.ok) return "";
+    return (await r.json()).text||"";
+  } catch { return ""; }
 }
-const aiEnabled=process.env.REACT_APP_ANTHROPIC_KEY&&process.env.REACT_APP_ANTHROPIC_KEY!=="placeholder";
+/* ATTENZIONE: non leggere qui variabili REACT_APP_* non definite nel .env —
+   CRA in quel caso inlina nel bundle l'INTERO process.env (chiavi comprese). */
+const aiEnabled=true;
 
 /* ── Utils ── */
 function compressImage(file,maxPx=800,quality=0.7) {
@@ -298,44 +308,72 @@ const isIOS = (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
                (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) &&
               !window.MSStream;
 
-/* ── URL print server: override esplicito da localStorage, altrimenti host corrente:3001 ── */
-const printServerBase = () => {
-  const override = (localStorage.getItem('printServerUrl') || '').trim().replace(/\/$/, '');
-  if (override) return override;
-  const host = window.location.hostname || 'localhost';
-  return `http://${host}:3001`;
-};
+/* ── Coda di stampa (print_jobs su Supabase) ──────────────────────────
+   L'app è online (HTTPS) e non può parlare col Mac mini in LAN (HTTP):
+   scrive un lavoro in `print_jobs` e il print server sul Mac mini lo
+   stampa sulla Brother QL. Stesso meccanismo dei cartellini del gestionale. */
+const LABEL_PRINTER = 'Brother_QL_1110NWB';   // coda CUPS sul Mac mini
+const LABEL_W_MM = 62, LABEL_H_MM = 100;      // rotolo Brother QL 62×100
 
-/* ── Stampa intelligente: server su iOS/iPadOS, dialogo nativo su Mac ── */
+async function enqueuePrint(html, copies = 1) {
+  const { data, error } = await supabase.from('print_jobs')
+    .insert({ tipo: 'etichetta', html, width_mm: LABEL_W_MM, height_mm: LABEL_H_MM, printer: LABEL_PRINTER, copies })
+    .select('id').single();
+  if (error) throw error;
+  return data?.id || null;
+}
+
+/* Attende l'esito leggendo lo stato aggiornato dal print server.
+   'timeout' = il Mac mini non ha risposto: il lavoro resta in coda. */
+async function waitForPrint(id, timeoutMs = 12000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { data } = await supabase.from('print_jobs').select('stato,errore').eq('id', id).maybeSingle();
+    if (data?.stato === 'done' || data?.stato === 'error') return data;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  return { stato: 'timeout' };
+}
+
+function showToast(text, bg = '#059669') {
+  const toast = document.createElement('div');
+  toast.textContent = text;
+  toast.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:${bg};color:white;padding:12px 24px;border-radius:20px;font-size:15px;font-weight:700;z-index:9999;font-family:-apple-system,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3)`;
+  document.body.appendChild(toast);
+  setTimeout(() => { try { document.body.removeChild(toast); } catch (_) {} }, 2500);
+}
+
+/* ── Stampa intelligente: coda sul Mac mini da iOS/iPadOS, dialogo nativo su Mac ── */
 function smartPrint(html) {
   if (isIOS) {
-    const serverUrl = localStorage.getItem('printServerUrl') || '';
-    if (!serverUrl) {
-      alert('⚠️ Server di stampa non configurato.\n\nVai in Impostazioni → Stampa e inserisci l\'IP del Mac Mini.');
-      return;
-    }
-    fetch(`${serverUrl}/print`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.ok) {
-          const toast = document.createElement('div');
-          toast.textContent = '🖨️ Etichetta inviata!';
-          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#059669;color:white;padding:12px 24px;border-radius:20px;font-size:15px;font-weight:700;z-index:9999;font-family:-apple-system,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-          document.body.appendChild(toast);
-          setTimeout(() => document.body.removeChild(toast), 2500);
-        } else {
-          alert('❌ Errore stampa: ' + (d.error || 'sconosciuto'));
-        }
-      })
-      .catch(e => alert('❌ Impossibile raggiungere il server di stampa.\n\nVerifica che il Mac Mini sia acceso e il server attivo.\n\n' + e.message));
+    enqueuePrint(html).then(async id => {
+      if (!id) return;
+      showToast('🖨️ Etichetta inviata al Mac mini…');
+      const res = await waitForPrint(id);
+      if (res.stato === 'done') showToast('✅ Etichetta stampata');
+      else if (res.stato === 'error') alert('❌ Errore stampa: ' + (res.errore || 'sconosciuto'));
+      else alert('⚠️ Il Mac mini non ha ancora stampato.\n\nVerifica che sia acceso e che il print server sia attivo: l\'etichetta resta in coda e uscirà appena riparte.');
+    }).catch(e => alert('❌ Impossibile accodare la stampa: ' + e.message));
   } else {
     /* Mac/desktop → dialogo di stampa nativo del browser */
     printHTML(html);
   }
+}
+
+/* ── Coda WhatsApp (wa_jobs su Supabase) ───────────────────────────────
+   I WhatsApp automatici non partono dal browser: vanno in `wa_jobs` e li
+   invia il bot sul Mac mini, l'unico collegato al numero del negozio.
+   Fire-and-forget: un errore finisce in console, non blocca l'operatore. */
+function enqueueWA(messages, tipo = 'riparazioni') {
+  const rows = (messages || []).filter(m => m && m.telefono && m.messaggio)
+    .map(m => ({ tipo, telefono: m.telefono, messaggio: m.messaggio }));
+  if (!rows.length) return Promise.resolve();
+  return Promise.resolve(supabase.from('wa_jobs').insert(rows))
+    .then(({ error }) => {
+      if (error) console.warn('WA coda non disponibile:', error.message);
+      else console.log(`📲 WA: ${rows.length} messaggi in coda`);
+    })
+    .catch(e => console.warn('WA coda non disponibile:', e.message));
 }
 function parseVCards(text) {
   /* Normalizza CRLF e unfolda le righe di continuazione (spazio/tab iniziale) */
@@ -746,17 +784,26 @@ function ddtHTML(ddt,items) {
 const BP=768;
 function useW(){const [w,setW]=useState(()=>window.innerWidth);useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w;}
 
-function PinScreen({onUnlock}) {
-  const PIN=process.env.REACT_APP_PIN||"1234";
-  const [val,setVal]=useState(""); const [err,setErr]=useState(false);
-  const check=()=>{if(val===PIN)onUnlock();else{setErr(true);setVal("");}};
+function LoginScreen() {
+  const [email,setEmail]=useState(()=>{try{return localStorage.getItem('loginEmail')||"";}catch{return "";}});
+  const [pw,setPw]=useState(""); const [err,setErr]=useState(""); const [busy,setBusy]=useState(false);
+  const submit=async()=>{
+    if(!email.trim()||!pw||busy)return;
+    setBusy(true);setErr("");
+    const {error}=await supabase.auth.signInWithPassword({email:email.trim(),password:pw});
+    setBusy(false);
+    if(error){setErr(/invalid login/i.test(error.message)?"Email o password non corretti":error.message);setPw("");return;}
+    try{localStorage.setItem('loginEmail',email.trim());}catch{}
+  };
+  const inp={textAlign:"center",fontSize:17,padding:"14px 20px",borderRadius:16,border:err?"2px solid #FF3B30":"2px solid transparent",boxShadow:"0 2px 12px rgba(0,0,0,.1)",outline:"none",width:260,background:"white",fontFamily:"-apple-system,sans-serif"};
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F2F2F7",fontFamily:"-apple-system,sans-serif",gap:20}}>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F2F2F7",fontFamily:"-apple-system,sans-serif",gap:16}}>
       <img src={zerrilloLogo} alt="Zerrillo preziosi" style={{height:90,width:"auto",objectFit:"contain"}}/>
-      <div style={{fontSize:14,color:C.secondary,fontWeight:600,letterSpacing:1}}>REPAIR MANAGER</div>
-      <input type="password" maxLength={6} value={val} onChange={e=>{setVal(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&check()} placeholder="PIN di accesso" autoFocus style={{textAlign:"center",fontSize:22,letterSpacing:8,padding:"14px 20px",borderRadius:16,border:err?"2px solid #FF3B30":"2px solid transparent",boxShadow:"0 2px 12px rgba(0,0,0,.1)",outline:"none",width:220,background:"white"}}/>
-      {err&&<div style={{color:C.red,fontSize:14,fontWeight:600}}>PIN non corretto</div>}
-      <button onClick={check} style={{background:"linear-gradient(135deg,#C9A227,#B8860B)",color:"white",border:"none",borderRadius:16,padding:"15px 50px",fontSize:17,fontWeight:700,cursor:"pointer"}}>Entra</button>
+      <div style={{fontSize:14,color:C.secondary,fontWeight:600,letterSpacing:1,marginBottom:8}}>REPAIR MANAGER</div>
+      <input type="email" autoComplete="username" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="Email" autoFocus={!email} style={inp}/>
+      <input type="password" autoComplete="current-password" value={pw} onChange={e=>{setPw(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Password" autoFocus={!!email} style={inp}/>
+      {err&&<div style={{color:C.red,fontSize:14,fontWeight:600}}>{err}</div>}
+      <button onClick={submit} disabled={busy} style={{background:"linear-gradient(135deg,#C9A227,#B8860B)",color:"white",border:"none",borderRadius:16,padding:"15px 50px",fontSize:17,fontWeight:700,cursor:"pointer",opacity:busy?.6:1}}>{busy?"Accesso…":"Entra"}</button>
     </div>
   );
 }
@@ -1930,29 +1977,26 @@ function SettingsPage({customers,repairs,ddts,repairers,orders=[],onRestore,onSa
   const [deleted,setDeleted]=useState([]); const [showDeleted,setShowDeleted]=useState(false);
   const [showRepairers,setShowRepairers]=useState(false);
   const [restoring,setRestoring]=useState(false); const [msg,setMsg]=useState("");
-  const [printUrl,setPrintUrl]=useState(()=>localStorage.getItem('printServerUrl')||"");
-  const [printStatus,setPrintStatus]=useState(null); const [testingPrint,setTestingPrint]=useState(false);
+  const [queueInfo,setQueueInfo]=useState(null); const [checkingQueue,setCheckingQueue]=useState(false);
+  const [userEmail,setUserEmail]=useState("");
   const fileRef=useRef();
+  useEffect(()=>{supabase.auth.getSession().then(({data})=>setUserEmail(data?.session?.user?.email||"")).catch(()=>{});},[]);
 
-  const savePrintUrl=(url)=>{
-    const clean=url.trim().replace(/\/$/,'');
-    setPrintUrl(clean);
-    localStorage.setItem('printServerUrl',clean);
-  };
-
-  const testPrintServer=async()=>{
-    if(!printUrl){setPrintStatus("⚠️ Inserisci l'URL del server");return;}
-    setTestingPrint(true);setPrintStatus(null);
+  /* Stato del Mac mini letto dalle code: un lavoro fermo in 'pending' da più
+     di un minuto vuol dire che il print server non sta consumando. */
+  const checkQueue=async()=>{
+    setCheckingQueue(true);
     try{
-      const r=await fetch(`${printUrl}/status`,{signal:AbortSignal.timeout(4000)});
-      const d=await r.json();
-      if(d.ok) setPrintStatus(`✅ Connesso · Stampante: ${d.printer||"rilevata"}`);
-      else setPrintStatus(`⚠️ Server raggiunto ma: ${d.error||"errore sconosciuto"}`);
-    }catch(e){
-      setPrintStatus(`❌ Non raggiungibile: ${e.message}`);
-    }
-    setTestingPrint(false);
+      const [{data:pj},{data:wj}]=await Promise.all([
+        supabase.from("print_jobs").select("stato,created_at,printed_at,errore").order("created_at",{ascending:false}).limit(5),
+        supabase.from("wa_jobs").select("stato,created_at,sent_at,errore").order("created_at",{ascending:false}).limit(5),
+      ]);
+      const stale=(rows)=>(rows||[]).some(r=>r.stato==="pending"&&Date.now()-new Date(r.created_at).getTime()>60*1000);
+      setQueueInfo({print:pj||[],wa:wj||[],stalePrint:stale(pj),staleWa:stale(wj)});
+    }catch(e){setQueueInfo({error:e.message});}
+    setCheckingQueue(false);
   };
+  const doLogout=async()=>{try{await supabase.auth.signOut();}catch(e){console.error(e);}};
 
   const loadDeleted=async()=>{setDeleted(await api.getDeletedRepairs());setShowDeleted(true);};
   const doRestore=async(id)=>{await api.restoreRepair(id);setDeleted(d=>d.filter(r=>r.id!==id));};
@@ -1961,39 +2005,35 @@ function SettingsPage({customers,repairs,ddts,repairers,orders=[],onRestore,onSa
 
   return (
     <div>
-      {/* ── Stampa ── */}
-      <SectionTitle>🖨️ Server di stampa</SectionTitle>
+      {/* ── Mac mini: stampa etichette + WhatsApp ── */}
+      <SectionTitle>🖨️ Stampa e WhatsApp (Mac mini)</SectionTitle>
       <IOSCard style={{marginBottom:12}}>
         <div style={{padding:"12px 16px"}}>
-          <div style={{fontSize:13,color:C.secondary,marginBottom:8,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:C.secondary,marginBottom:10,lineHeight:1.5}}>
             {isIOS
-              ? "iPhone usa il server sul Mac Mini per stampare con il formato corretto."
-              : "Su Mac le etichette vengono stampate direttamente dal browser."}
+              ? "Le etichette e i WhatsApp automatici passano dalla coda online: il Mac mini in negozio li stampa e li invia. Deve essere acceso e collegato."
+              : "Su Mac le etichette si stampano dal browser. I WhatsApp automatici li invia il Mac mini in negozio, che deve essere acceso e collegato."}
           </div>
-          {isIOS&&<>
-            <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>URL server Mac Mini</div>
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              <input
-                value={printUrl}
-                onChange={e=>setPrintUrl(e.target.value)}
-                onBlur={e=>savePrintUrl(e.target.value)}
-                placeholder="http://192.168.1.X:3001"
-                style={{flex:1,background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,fontFamily:"-apple-system,sans-serif",outline:"none"}}
-              />
-              <button onClick={()=>savePrintUrl(printUrl)} style={{background:C.blue,border:"none",borderRadius:10,padding:"10px 14px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>Salva</button>
-            </div>
-            <button onClick={testPrintServer} disabled={testingPrint} style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,color:C.label,cursor:"pointer",opacity:testingPrint?.6:1}}>
-              {testingPrint?"⏳ Verifica…":"🔍 Testa connessione"}
-            </button>
-            {printStatus&&<div style={{marginTop:8,fontSize:13,color:printStatus.startsWith("✅")?"#059669":printStatus.startsWith("⚠️")?"#B8860B":C.red,fontWeight:600}}>{printStatus}</div>}
-            <div style={{marginTop:12,background:"#F2F2F7",borderRadius:10,padding:10,fontSize:12,color:C.secondary,lineHeight:1.6}}>
-              <b>Setup Mac Mini:</b><br/>
-              1. Apri Terminale e vai nella cartella <code>print-server</code><br/>
-              2. <code>npm install</code> poi <code>node server.js</code><br/>
-              3. L'IP del Mac Mini: <b>Impostazioni → WiFi → ⓘ</b>
-            </div>
-          </>}
-          {!isIOS&&<div style={{fontSize:13,color:C.secondary}}>Accedi dall'iPhone per configurare il server remoto.</div>}
+          <button onClick={checkQueue} disabled={checkingQueue} style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,color:C.label,cursor:"pointer",opacity:checkingQueue?.6:1}}>
+            {checkingQueue?"⏳ Verifica…":"🔍 Verifica stato code"}
+          </button>
+          {queueInfo&&(queueInfo.error
+            ?<div style={{marginTop:8,fontSize:13,color:C.red,fontWeight:600}}>❌ {queueInfo.error}</div>
+            :<div style={{marginTop:10,fontSize:13,lineHeight:1.7}}>
+              <div style={{fontWeight:600,color:queueInfo.stalePrint?C.red:"#059669"}}>{queueInfo.stalePrint?"⚠️ Etichette ferme in coda: il Mac mini non sta stampando":"✅ Coda etichette regolare"}</div>
+              <div style={{fontWeight:600,color:queueInfo.staleWa?C.red:"#059669"}}>{queueInfo.staleWa?"⚠️ WhatsApp fermi in coda: il Mac mini non sta inviando":"✅ Coda WhatsApp regolare"}</div>
+              {queueInfo.print[0]&&<div style={{color:C.secondary}}>Ultima etichetta: {queueInfo.print[0].stato} · {new Date(queueInfo.print[0].created_at).toLocaleString("it-IT")}{queueInfo.print[0].errore?` · ${queueInfo.print[0].errore}`:""}</div>}
+              {queueInfo.wa[0]&&<div style={{color:C.secondary}}>Ultimo WhatsApp: {queueInfo.wa[0].stato} · {new Date(queueInfo.wa[0].created_at).toLocaleString("it-IT")}{queueInfo.wa[0].errore?` · ${queueInfo.wa[0].errore}`:""}</div>}
+            </div>)}
+        </div>
+      </IOSCard>
+
+      {/* ── Account ── */}
+      <SectionTitle>🔐 Account</SectionTitle>
+      <IOSCard style={{marginBottom:12}}>
+        <IOSRow icon="👤" label="Collegato come" value={userEmail||"—"}/>
+        <div style={{padding:"10px 16px 14px"}}>
+          <button onClick={doLogout} style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,color:C.red,cursor:"pointer"}}>Esci</button>
         </div>
       </IOSCard>
 
@@ -4433,9 +4473,7 @@ function MainApp() {
     await Promise.all([loadRepairs(),loadDDTs()]);
     setRientroRapido(false);
     if(bulkMessages.length>0){
-      fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:bulkMessages})})
-        .then(r=>r.json()).then(d=>console.log(`📲 WA bulk: ${d.queued} messaggi in coda`))
-        .catch(e=>console.warn("WA bulk non disponibile:",e.message));
+      enqueueWA(bulkMessages,"rientro");
     }
   };
 
@@ -4493,9 +4531,7 @@ function MainApp() {
       const priceInfo=totProd>0?`\nImporto: ${totProd.toFixed(2)} €${accProd>0?`\nAcconto versato: ${accProd.toFixed(2)} €`:""}${rimProd>0?`\nRimanenza da pagare: ${rimProd.toFixed(2)} €`:""}`:""
       if(stato==="arrivato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo articolo "${nomeProd}" (ordine n° ${ord.numero}) è arrivato ed è pronto per il ritiro.${priceInfo}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-        fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
-          .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
-          .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
+        enqueueWA([{telefono:waPhone(c),messaggio:msg}],"ordine");
       } else if(stato==="consegnato"){
         const msg=`Gentile ${c.nome} ${c.cognome},\nconfermiamo la consegna di "${nomeProd}" dell'ordine n° ${ord.numero}.${priceInfo}\n\nGrazie per aver scelto ${SHOP.nome}.`;
         setWaToast({repair:ord,customer:c,customMsg:msg,label:"📄 Articolo consegnato"});
@@ -4528,9 +4564,7 @@ function MainApp() {
       const totLines=totOrd>0?`\nImporto totale: ${totOrd.toFixed(2)} €${totAcc>0?`\nAcconto versato: ${totAcc.toFixed(2)} €`:""}${rimOrd>0?`\nRimanenza da pagare: ${rimOrd.toFixed(2)} €`:""}`:""
       const artLines=prodotti.map(p=>`• ${p.quantita>1?p.quantita+"× ":""}${p.descrizione}${p.marca?` (${p.marca})`:""}`).join("\n");
       const msg=`Gentile ${c.nome} ${c.cognome},\nle comunichiamo che il suo ordine n° ${ord.numero} è arrivato ed è pronto per il ritiro:\n${artLines}${totLines}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
-      fetch(`${printServerBase()}/wa/send-bulk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{telefono:waPhone(c),messaggio:msg}]})})
-        .then(r=>r.json()).then(d=>console.log(`📲 WA ordine arrivato inviato a ${c.nome} ${c.cognome}`))
-        .catch(e=>console.warn("WA ordine arrivato non disponibile:",e.message));
+      enqueueWA([{telefono:waPhone(c),messaggio:msg}],"ordine");
     }
   };
 
@@ -4775,7 +4809,14 @@ function MainApp() {
 }
 
 export default function App() {
-  const [unlocked,setUnlocked]=useState(false);
-  if(!unlocked)return <PinScreen onUnlock={()=>setUnlocked(true)}/>;
+  /* undefined = sessione non ancora letta (evita il flash della schermata di login) */
+  const [session,setSession]=useState(undefined);
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data})=>setSession(data?.session||null)).catch(()=>setSession(null));
+    const {data:sub}=supabase.auth.onAuthStateChange((_evt,s)=>setSession(s||null));
+    return ()=>{try{sub?.subscription?.unsubscribe();}catch{}};
+  },[]);
+  if(session===undefined)return null;
+  if(!session)return <LoginScreen/>;
   return <MainApp/>;
 }

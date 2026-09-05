@@ -91,7 +91,7 @@ test("E4 — rientro rapido singolo: costi, stato, data rientro, DDT auto-chiuso
 
   // singola riparazione → WAToast manuale, nessuna chiamata bulk
   await screen.findByText(new RegExp(`R${anno}-0001 è pronto!`));
-  expect(global.fetch.mock.calls.find(([u]) => String(u).includes("/wa/send-bulk"))).toBeUndefined();
+  expect(__fake.db.wa_jobs).toHaveLength(0);
 });
 
 test("E4/G3 — rientro rapido multiplo: WA bulk automatico con un messaggio per cliente", async () => {
@@ -108,12 +108,11 @@ test("E4/G3 — rientro rapido multiplo: WA bulk automatico con un messaggio per
   await screen.findByText("💰 Costi e stato");
   click(screen.getByText("✅ Conferma rientri"));
 
+  // i WA automatici vanno nella coda wa_jobs (li invia il bot sul Mac mini)
   await waitFor(() => {
-    const call = global.fetch.mock.calls.find(([u]) => String(u).includes("/wa/send-bulk"));
-    expect(call).toBeTruthy();
-    const body = JSON.parse(call[1].body);
-    expect(body.messages).toHaveLength(2);
-    expect(body.messages[0].messaggio).toMatch(/pronta per il ritiro/);
+    expect(__fake.db.wa_jobs).toHaveLength(2);
+    expect(__fake.db.wa_jobs[0].messaggio).toMatch(/pronta per il ritiro/);
+    expect(__fake.db.wa_jobs[0].tipo).toBe("rientro");
   });
 });
 

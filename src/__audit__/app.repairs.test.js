@@ -128,7 +128,8 @@ test("A9 — cambio stato a 'consegnato' imposta data_consegnata", async () => {
 test("FIX C3 — Supabase irraggiungibile all'avvio: l'app avvisa con il banner di connessione persa", async () => {
   __fake.setFailSelects(true);
   render(<App />);
-  fireEvent.change(screen.getByPlaceholderText("PIN di accesso"), { target: { value: "1234" } });
+  fireEvent.change(await screen.findByPlaceholderText("Email"), { target: { value: "op@test.it" } });
+  fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "test" } });
   fireEvent.click(screen.getByText("Entra"));
   // ora il degrado offline e' segnalato, non silenzioso
   await screen.findByText(/aggiornati/);

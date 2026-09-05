@@ -6,6 +6,7 @@
 
 const db = {
   customers: [], repairs: [], ddts: [], repairers: [], orders: [], quote_tokens: [],
+  print_jobs: [], wa_jobs: [],
 };
 
 let _ts = Date.now();
@@ -110,9 +111,26 @@ class Query {
   }
 }
 
+/* Auth finta: sessione in memoria; password valida = "test". */
+let fakeSession = null;
+const authListeners = [];
+const notifyAuth = (evt) => authListeners.forEach((cb) => { try { cb(evt, fakeSession); } catch (_) {} });
+const auth = {
+  getSession: async () => ({ data: { session: fakeSession }, error: null }),
+  onAuthStateChange: (cb) => { authListeners.push(cb); return { data: { subscription: { unsubscribe() { const i = authListeners.indexOf(cb); if (i >= 0) authListeners.splice(i, 1); } } } }; },
+  signInWithPassword: async ({ email, password }) => {
+    if (password !== "test") return { data: { session: null, user: null }, error: { message: "Invalid login credentials" } };
+    fakeSession = { access_token: "fake-jwt", user: { id: "u1", email } };
+    notifyAuth("SIGNED_IN");
+    return { data: { session: fakeSession, user: fakeSession.user }, error: null };
+  },
+  signOut: async () => { fakeSession = null; notifyAuth("SIGNED_OUT"); return { error: null }; },
+};
+
 const channels = [];
 const supabase = {
   from: (table) => new Query(table),
+  auth,
   channel: (name) => {
     const ch = {
       name,
@@ -137,6 +155,7 @@ const __fake = {
     for (const k of Object.keys(db)) db[k] = [];
     realtimeHandlers.length = 0;
     channels.length = 0;
+    fakeSession = null; authListeners.length = 0;
     autoEmit = true; failSelects = false; failWrites = false;
   },
   seed(table, rowsArr) {

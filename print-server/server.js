@@ -248,12 +248,15 @@ function initPrintQueue() {
     try {
       /* htmlToPdf riavvia Chrome e riprova una volta se la generazione fallisce */
       await htmlToPdf(job.html, tmpPdf, `${job.width_mm}mm`, `${job.height_mm}mm`);
+      /* Le etichette riparazioni (tipo 'etichetta', dall'app online) usano le
+         stesse opzioni lp che aveva POST /print: fit-to-page + qualità alta. */
+      const extra = job.tipo === 'etichetta' ? ['-o fit-to-page', '-o print-quality=5'] : [];
       const cmd = ['lp', `-d "${job.printer}"`, `-n ${job.copies || 1}`,
                    `-o media=Custom.${job.width_mm}x${job.height_mm}mm`,
-                   `"${tmpPdf}"`].join(' ');
+                   ...extra, `"${tmpPdf}"`].join(' ');
       await new Promise((res, rej) => exec(cmd, (e, out, err) => { cleanup(); e ? rej(new Error(err || e.message)) : res(out); }));
       await supabase.from('print_jobs').update({ stato: 'done', printed_at: new Date().toISOString() }).eq('id', job.id);
-      console.log(`🏷️  Cartellino stampato (${job.id})`);
+      console.log(`🏷️  ${job.tipo === 'etichetta' ? 'Etichetta' : 'Cartellino'} stampato (${job.id})`);
     } catch (e) {
       cleanup();
       await supabase.from('print_jobs').update({ stato: 'error', errore: String(e.message || e) }).eq('id', job.id);

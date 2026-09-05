@@ -66,15 +66,15 @@ test("C3 — prodotto → 'arrivato': stato ordine derivato + WA automatico fire
   await waitFor(() => expect(__fake.db.orders[0].stato).toBe("arrivato"));
   expect(__fake.db.orders[0].prodotti[0].stato).toBe("arrivato");
 
-  // WA automatico: chiamata al print server con messaggio corretto…
-  const waCall = global.fetch.mock.calls.find(([url]) => String(url).includes("/wa/send-bulk"));
-  expect(waCall).toBeTruthy();
-  const body = JSON.parse(waCall[1].body);
-  expect(body.messages[0].telefono).toBe("+393331234567"); // E.164 (fix A4)
-  expect(body.messages[0].messaggio).toMatch(/Anello X/);
-  expect(body.messages[0].messaggio).toMatch(/80\.00/); // rimanenza 100-20
+  // WA automatico: riga in coda wa_jobs con messaggio corretto…
+  await waitFor(() => expect(__fake.db.wa_jobs).toHaveLength(1));
+  const job = __fake.db.wa_jobs[0];
+  expect(job.telefono).toBe("+393331234567"); // E.164 (fix A4)
+  expect(job.messaggio).toMatch(/Anello X/);
+  expect(job.messaggio).toMatch(/80\.00/); // rimanenza 100-20
+  expect(job.tipo).toBe("ordine");
 
-  // …ma il fetch è fallito (server spento simulato) e NESSUN errore è mostrato all'utente
+  // …e NESSUN errore è mostrato all'utente (invio asincrono dal Mac mini)
   await new Promise((r) => setTimeout(r, 50));
   expect(window.alert).not.toHaveBeenCalled();
   expect(screen.queryByText(/non inviato|errore/i)).toBeNull();
@@ -143,13 +143,10 @@ test("FIX ordine — 'CAMBIA STATO ORDINE' → Arrivato propaga a TUTTI i prodot
   expect(__fake.db.orders[0].prodotti.every((p) => p.stato === "arrivato")).toBe(true);
 
   // esattamente 1 WhatsApp, riepilogo ordine, in E.164
-  const waCalls = global.fetch.mock.calls.filter(([u]) => String(u).includes("/wa/send-bulk"));
-  expect(waCalls).toHaveLength(1);
-  const body = JSON.parse(waCalls[0][1].body);
-  expect(body.messages).toHaveLength(1);
-  expect(body.messages[0].telefono).toBe("+393331234567");
-  expect(body.messages[0].messaggio).toMatch(/ORD2026-0005/);
-  expect(body.messages[0].messaggio).toMatch(/arrivat|pronto/i);
+  await waitFor(() => expect(__fake.db.wa_jobs).toHaveLength(1));
+  expect(__fake.db.wa_jobs[0].telefono).toBe("+393331234567");
+  expect(__fake.db.wa_jobs[0].messaggio).toMatch(/ORD2026-0005/);
+  expect(__fake.db.wa_jobs[0].messaggio).toMatch(/arrivat|pronto/i);
 });
 
 test("FIX ordine — ordine a 1 articolo: stato ordine ad Arrivato rende attiva la consegna (no bottone morto per A9)", async () => {

@@ -1,0 +1,25 @@
+# Netlify — app riparazioni (SPA Create React App + Function AI).
+# Env da impostare su Netlify (Site settings → Environment), MAI committate:
+#   REACT_APP_SUPABASE_URL, REACT_APP_SUPABASE_KEY (chiave publishable/anon)
+#   ANTHROPIC_API_KEY (solo server-side, usata dalla Function ai)
+# Le pagine pubbliche docs/*.html restano su GitHub Pages: qui non c'entrano.
+
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # CRA con CI=true tratta i warning eslint come errori: i warning preesistenti
+  # non devono bloccare il deploy.
+  CI = "false"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
