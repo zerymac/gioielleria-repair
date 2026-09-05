@@ -5,7 +5,13 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
-### Sessione 05/09/2026 — app riparazioni ONLINE (Netlify), Mac mini solo stampa+WhatsApp — branch `feature/online`, NON ancora deployato
+### Sessione 05/09/2026 sera — WhatsApp automatico di presa in carico (commit 76991ae, IN PRODUZIONE)
+
+- Alla creazione di una riparazione (`handleSaveRepair`) l'app accoda in `wa_jobs` un messaggio `tipo:'nuova_riparazione'` al cliente, costruito da `nuovaRiparazioneMsg(customer, reps)`: numero pratica, oggetto, lavoro richiesto, preventivo (o "da definire" se `richiestaPreventivo`), "Intervento in garanzia", consegna prevista, link di stato (`repair-status.html?token=…`) per ogni riparazione, firma negozio. **Un messaggio per cliente** anche con più oggetti nella stessa pratica (elenco puntato + un link per riga). Nessun invio senza telefono. Lo spedisce il bot sul Mac mini dal numero del negozio, qualunque dispositivo usi l'operatore.
+- Testo approvato dal proprietario prima del deploy. Test `WA presa in carico` aggiunto in `app.repairs.test.js` (verde). Merge ff in `main` e push → Netlify ha pubblicato (bundle verificato contiene il testo). Branch `feature/online` e `feature/wa-nuova-riparazione` eliminati (locale + GitHub).
+- Da verificare col primo uso reale: che il cliente riceva il messaggio e che il link di stato si apra.
+
+### Sessione 05/09/2026 — app riparazioni ONLINE (Netlify), Mac mini solo stampa+WhatsApp — COMPLETATA (dettagli sotto)
 
 Decisione del proprietario: spostare l'app completamente online e tenere il Mac mini solo per etichette e WhatsApp. Scelte confermate: hosting **Netlify**, AI mantenuta tramite **Netlify Function**, accesso con **login Supabase** (niente PIN).
 
