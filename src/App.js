@@ -364,6 +364,31 @@ function smartPrint(html) {
    I WhatsApp automatici non partono dal browser: vanno in `wa_jobs` e li
    invia il bot sul Mac mini, l'unico collegato al numero del negozio.
    Fire-and-forget: un errore finisce in console, non blocca l'operatore. */
+/* Messaggio automatico di presa in carico: uno per cliente, anche con più
+   oggetti nella stessa pratica; ogni riparazione ha il suo link di stato. */
+function nuovaRiparazioneMsg(customer, reps) {
+  const statusLink = r => r.linkToken ? `https://zerymac.github.io/gioielleria-repair/repair-status.html?token=${r.linkToken}&n=${r.numero}` : null;
+  const first = reps[0];
+  const lines = [`Gentile ${customer.nome} ${customer.cognome},`];
+  if (reps.length === 1) {
+    lines.push(`abbiamo preso in carico la sua riparazione n° ${first.numero}.`, '');
+    lines.push(`Oggetto: ${first.descrizione}`);
+    if (first.problema) lines.push(`Lavoro richiesto: ${first.problema}`);
+  } else {
+    lines.push(`abbiamo preso in carico le sue ${reps.length} riparazioni:`, '');
+    reps.forEach(r => lines.push(`• n° ${r.numero} — ${r.descrizione}`));
+  }
+  if (first.preventivo) lines.push(`Preventivo: ${first.preventivo} €`);
+  else if (first.richiestaPreventivo) lines.push('Preventivo: da definire, la contatteremo appena disponibile.');
+  if (first.inGaranzia) lines.push('Intervento in garanzia.');
+  if (first.dataConsegna) lines.push(`Consegna prevista: ${fmtDate(first.dataConsegna)}`);
+  const links = reps.map(statusLink).filter(Boolean);
+  if (links.length === 1) lines.push('', 'Può seguire lo stato della riparazione qui:', links[0]);
+  else if (links.length > 1) { lines.push('', 'Può seguire lo stato delle riparazioni qui:'); reps.forEach(r => { const l = statusLink(r); if (l) lines.push(`${r.numero}: ${l}`); }); }
+  lines.push('', SHOP.nome, `${SHOP.indirizzo}, ${SHOP.citta}`, `Tel. ${SHOP.tel}`);
+  return lines.join('\n');
+}
+
 function enqueueWA(messages, tipo = 'riparazioni') {
   const rows = (messages || []).filter(m => m && m.telefono && m.messaggio)
     .map(m => ({ tipo, telefono: m.telefono, messaggio: m.messaggio }));
@@ -4616,6 +4641,9 @@ function MainApp() {
     setWizard(false);
     if(c&&savedRepairs.length>0){
       setReceiptModal({repair:savedRepairs[0],customer:c,allRepairs:savedRepairs});
+      /* WhatsApp automatico di presa in carico dal numero del negozio (coda
+         wa_jobs → bot sul Mac mini), qualunque dispositivo stia usando l'operatore. */
+      if(c.telefono) enqueueWA([{telefono:waPhone(c),messaggio:nuovaRiparazioneMsg(c,savedRepairs)}],"nuova_riparazione");
     }
   };
 

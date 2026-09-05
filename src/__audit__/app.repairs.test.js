@@ -32,6 +32,23 @@ test("A1/A3 — intake wizard completo: riparazione salvata con numero progressi
   expect(r.link_token).toBeTruthy();
 });
 
+test("WA presa in carico — alla creazione parte un WhatsApp dal Mac mini (coda wa_jobs) con numero e link di stato", async () => {
+  render(<App />);
+  await unlockAndLoad();
+  await runRepairWizard();
+
+  await waitFor(() => expect(__fake.db.wa_jobs).toHaveLength(1));
+  const job = __fake.db.wa_jobs[0];
+  const r = __fake.db.repairs[0];
+  expect(job.tipo).toBe("nuova_riparazione");
+  expect(job.telefono).toBe("+393331234567"); // E.164 dal prefisso del cliente
+  expect(job.messaggio).toMatch(/Gentile Mario Rossi/);
+  expect(job.messaggio).toMatch(new RegExp(`preso in carico la sua riparazione n° ${r.numero}`));
+  expect(job.messaggio).toMatch(/Oggetto: Anello oro test/);
+  expect(job.messaggio).toMatch(/Preventivo: 100 €/);
+  expect(job.messaggio).toContain(`repair-status.html?token=${r.link_token}&n=${r.numero}`);
+});
+
 test("FIX C2 — marca, referenza e nota preventivo raccolti dal wizard vengono salvati", async () => {
   render(<App />);
   await unlockAndLoad();
