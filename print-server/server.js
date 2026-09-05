@@ -47,6 +47,47 @@ async function getBrowser() {
   return _browser;
 }
 
+/* Butta via il browser in cache (es. dopo un errore di generazione PDF)
+   cosi' il prossimo getBrowser() ne avvia uno pulito. */
+async function resetBrowser() {
+  const b = _browser;
+  _browser = null;
+  if (b) { try { await b.close(); } catch (_) {} }
+}
+
+/* Genera il PDF dell'etichetta con un retry: se Chrome headless e' morto o
+   non parte (visto in produzione: "Timed out ... WS endpoint URL"), al primo
+   errore lo si riavvia da zero e si riprova una volta — cosi' un'etichetta
+   non si perde in silenzio per un browser in stato zombie. */
+async function htmlToPdf(html, tmpPdf, width, height) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      try {
+        /* 'load' e non 'networkidle2': l'HTML delle etichette e' autonomo (QR
+           come SVG inline, niente risorse esterne) e networkidle2 aggiungeva
+           ~500-700ms di attesa fissa a ogni stampa. */
+        await page.setContent(html, { waitUntil: 'load', timeout: 15000 });
+        await page.pdf({
+          path: tmpPdf,
+          width,
+          height,
+          printBackground: true,
+          margin: { top: 0, right: 0, bottom: 0, left: 0 },
+        });
+      } finally {
+        try { await page.close(); } catch (_) {}
+      }
+      return;
+    } catch (e) {
+      if (attempt >= 2) throw e;
+      console.warn(`⚠️  Generazione PDF fallita (${e.message}) — riavvio Chrome e riprovo…`);
+      await resetBrowser();
+    }
+  }
+}
+
 /* ── Trova nome stampante Brother nel sistema ─────────────────────── */
 function getBrotherPrinter() {
   return new Promise((resolve, reject) => {
@@ -120,26 +161,7 @@ app.post('/print', async (req, res) => {
 
   try {
     console.log(`📄 Generazione PDF ${width}×${height}…`);
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-
-    /* 'load' e non 'networkidle2': l'HTML delle etichette e' autonomo (QR come
-       SVG inline, niente risorse esterne) e networkidle2 aggiungeva ~500-700ms
-       di attesa fissa a ogni stampa. */
-    await page.setContent(html, {
-      waitUntil: 'load',
-      timeout: 15000,
-    });
-
-    await page.pdf({
-      path: tmpPdf,
-      width,
-      height,
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
-
-    await page.close();
+    await htmlToPdf(html, tmpPdf, width, height);
     console.log(`✅ PDF generato`);
 
     const printer = BROTHER_PRINTER || await getBrotherPrinter();
@@ -163,7 +185,9 @@ app.post('/print', async (req, res) => {
 
   } catch (e) {
     cleanup();
-    console.error('❌ Errore stampa background:', e.message);
+    /* Il client ha gia' ricevuto "queued": questa etichetta NON e' uscita e
+       nessuno se ne accorge dall'iPhone — il log deve urlare. */
+    console.error('❌❌ ETICHETTA PERSA — stampa fallita anche dopo retry:', e.message);
   }
 });
 
@@ -222,14 +246,8 @@ function initPrintQueue() {
     const tmpPdf = path.join(os.tmpdir(), `cartellino-${job.id}.pdf`);
     const cleanup = () => { try { fs.unlinkSync(tmpPdf); } catch (_) {} };
     try {
-      const browser = await getBrowser();
-      const page = await browser.newPage();
-      /* 'load': come sopra, l'HTML dei cartellini e' autonomo — networkidle2
-         costava ~500-700ms fissi in piu' per etichetta. */
-      await page.setContent(job.html, { waitUntil: 'load', timeout: 15000 });
-      await page.pdf({ path: tmpPdf, width: `${job.width_mm}mm`, height: `${job.height_mm}mm`,
-                       printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
-      await page.close();
+      /* htmlToPdf riavvia Chrome e riprova una volta se la generazione fallisce */
+      await htmlToPdf(job.html, tmpPdf, `${job.width_mm}mm`, `${job.height_mm}mm`);
       const cmd = ['lp', `-d "${job.printer}"`, `-n ${job.copies || 1}`,
                    `-o media=Custom.${job.width_mm}x${job.height_mm}mm`,
                    `"${tmpPdf}"`].join(' ');
