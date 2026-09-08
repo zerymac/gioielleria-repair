@@ -419,6 +419,13 @@ function initWABot() {
   waClient = new Client({
     authStrategy: new LocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
     puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'], timeout: 120000 },
+    /* Versione di WhatsApp Web bloccata (08/09/2026): le build successive
+       hanno rinominato `_serialized` in `$1` e whatsapp-web.js 1.34.7 non le
+       regge (invio fallisce con errore "r", avvio con "Execution context was
+       destroyed"). La build e' servita dalla cache locale .wwebjs_cache/.
+       Quando esce una release della libreria che le supporta, togliere il pin. */
+    webVersion: process.env.WA_WEB_VERSION || '2.3000.1046900546',
+    webVersionCache: { type: 'local', path: path.join(__dirname, '.wwebjs_cache'), strict: true },
   });
 
   waClient.on('qr', async qr => {
@@ -458,7 +465,14 @@ function initWABot() {
   });
 
   console.log('🔄 Avvio WhatsApp Web client…');
-  waClient.initialize();
+  /* Senza catch un errore di avvio (es. "Execution context was destroyed"
+     quando WhatsApp Web si ricarica durante l'inject) e' un unhandled
+     rejection: Node esce e cadono anche cartellini e ricevute. */
+  waClient.initialize().catch(e => {
+    waReady = false;
+    console.error('❌ WhatsApp non avviato:', e.message);
+    console.error('   Stampe attive; per WhatsApp riavvia il server (launchctl kickstart -k gui/501/com.zerrillo.printserver)');
+  });
 }
 
 /* ── Invio massivo con delay ── */
