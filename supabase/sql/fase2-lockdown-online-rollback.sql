@@ -9,5 +9,6 @@ create policy "accesso completo" on public.ddts         for all to public using 
 create policy "accesso completo" on public.repairers    for all to public using (true) with check (true);
 create policy "Allow all"        on public.orders       for all to public using (true) with check (true);
 create policy "public access"    on public.quote_tokens for all to public using (true) with check (true);
+drop policy if exists repair_photos_select on storage.objects;
 create policy "Allow anon insert" on storage.objects for insert to anon with check (bucket_id = 'repair-photos');
 create policy "Allow anon update" on storage.objects for update to anon using (bucket_id = 'repair-photos');

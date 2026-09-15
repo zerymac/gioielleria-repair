@@ -69,7 +69,10 @@ drop policy if exists "Allow anon insert" on storage.objects;
 drop policy if exists "Allow anon update" on storage.objects;
 drop policy if exists repair_photos_insert on storage.objects;
 drop policy if exists repair_photos_update on storage.objects;
+drop policy if exists repair_photos_select on storage.objects;
 create policy repair_photos_insert on storage.objects for insert to authenticated with check (bucket_id = 'repair-photos');
 create policy repair_photos_update on storage.objects for update to authenticated using (bucket_id = 'repair-photos');
+-- SELECT serve perché l'upload è un upsert (ON CONFLICT DO UPDATE RETURNING): senza, 42501.
+create policy repair_photos_select on storage.objects for select to authenticated using (bucket_id = 'repair-photos');
 
 -- Fine Fase 2 lockdown (app online).

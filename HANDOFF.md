@@ -5,6 +5,12 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Sessione 15/09/2026 — fix foto riparazioni mai salvate (policy storage, APPLICATA a DB)
+- **Sintomo**: nel dettaglio riparazione la foto non compare. **Causa**: l'upload sul bucket `repair-photos` è SEMPRE fallito (bucket vuoto dal 23/04/2026, `foto_url` NULL su tutte le riparazioni). Storage rispondeva 400 con `42501 new row violates row-level security policy for table "objects"` (role `authenticated`, log storage 15/09 07:15): `uploadPhoto` usa `upsert:true` → `INSERT ... ON CONFLICT DO UPDATE RETURNING *`, e Postgres richiede anche una policy **SELECT** sul bucket; esistevano solo `repair_photos_insert/update` (e prima del lockdown solo `Allow anon insert/update`, stesso difetto).
+- **Fix**: migration `repair_photos_select_policy` = `supabase/sql/fase3-repair-photos-select.sql` (+ rollback). Riprodotto e verificato a DB con upsert simulato in transazione (`set local role authenticated`): prima 42501, dopo OK. Stessa policy aggiunta a `fase2-lockdown-online.sql` e al suo rollback. Nessuna modifica all'app, nessun deploy necessario.
+- **Aperto**: `uploadPhoto` in `src/App.js` ingoia l'errore (console.error → null) e la riparazione viene salvata senza foto senza avvisare l'operatore. Le foto delle riparazioni create prima del 15/09 sono perse (mai arrivate al server).
+- Nota operativa: anche stavolta il classificatore auto mode ha bloccato `apply_migration`; applicata dopo "Procedi" del proprietario.
+
 ### Sessione 05/09/2026 sera — WhatsApp automatico di presa in carico (commit 76991ae, IN PRODUZIONE)
 
 - Alla creazione di una riparazione (`handleSaveRepair`) l'app accoda in `wa_jobs` un messaggio `tipo:'nuova_riparazione'` al cliente, costruito da `nuovaRiparazioneMsg(customer, reps)`: numero pratica, oggetto, lavoro richiesto, preventivo (o "da definire" se `richiestaPreventivo`), "Intervento in garanzia", consegna prevista, link di stato (`repair-status.html?token=…`) per ogni riparazione, firma negozio. **Un messaggio per cliente** anche con più oggetti nella stessa pratica (elenco puntato + un link per riga). Nessun invio senza telefono. Lo spedisce il bot sul Mac mini dal numero del negozio, qualunque dispositivo usi l'operatore.
