@@ -231,8 +231,12 @@ function compressImage(file,maxPx=800,quality=0.7) {
 }
 const blobToDataURL=(blob)=>new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(blob);});
 
+/* Ultimo errore di upload foto, letto da chi salva per avvisare l'operatore
+   (l'upload fallito non deve bloccare il salvataggio della riparazione). */
+let _lastPhotoError=null;
 async function uploadPhoto(blob,repairId) {
-  try { const path=`repairs/${repairId}.jpg`; const {error}=await supabase.storage.from("repair-photos").upload(path,blob,{upsert:true,contentType:"image/jpeg"}); if(error){console.error(error);return null;} const {data}=supabase.storage.from("repair-photos").getPublicUrl(path); return data.publicUrl; } catch(e){console.error(e);return null;}
+  _lastPhotoError=null;
+  try { const path=`repairs/${repairId}.jpg`; const {error}=await supabase.storage.from("repair-photos").upload(path,blob,{upsert:true,contentType:"image/jpeg"}); if(error){console.error(error);_lastPhotoError=error.message||String(error);return null;} const {data}=supabase.storage.from("repair-photos").getPublicUrl(path); return data.publicUrl; } catch(e){console.error(e);_lastPhotoError=e?.message||String(e);return null;}
 }
 
 /* Rende assoluto un URL relativo (necessario per logo in finestre esterne) */
@@ -335,12 +339,12 @@ async function waitForPrint(id, timeoutMs = 12000) {
   return { stato: 'timeout' };
 }
 
-function showToast(text, bg = '#059669') {
+function showToast(text, bg = '#059669', ms = 2500) {
   const toast = document.createElement('div');
   toast.textContent = text;
   toast.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:${bg};color:white;padding:12px 24px;border-radius:20px;font-size:15px;font-weight:700;z-index:9999;font-family:-apple-system,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3)`;
   document.body.appendChild(toast);
-  setTimeout(() => { try { document.body.removeChild(toast); } catch (_) {} }, 2500);
+  setTimeout(() => { try { document.body.removeChild(toast); } catch (_) {} }, ms);
 }
 
 /* ── Stampa intelligente: coda sul Mac mini da iOS/iPadOS, dialogo nativo su Mac ── */
@@ -4633,7 +4637,7 @@ function MainApp() {
       const id=uid();
       const linkToken=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})();
       const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,marca:item.marca,referenza:item.referenza,notaPreventivo:form.notaPreventivo,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,inGaranzia:form.inGaranzia||false,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
-      if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;}
+      if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;else showToast(`⚠️ Foto non salvata${_lastPhotoError?` (${_lastPhotoError})`:""}. Riparazione registrata senza foto.`,'#DC2626',7000);}
       await api.upsertRepair(n);
       savedRepairs.push(n);
     }
