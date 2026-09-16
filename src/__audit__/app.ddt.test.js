@@ -73,7 +73,7 @@ test("E4 — rientro rapido singolo: costi, stato, data rientro, DDT auto-chiuso
   await unlockAndLoad();
 
   click(screen.getByText("Rientro rapido dal fornitore"));
-  await screen.findByText("Seleziona le riparazioni rientrate dal fornitore. Puoi scansionare il QR o spuntarle dalla lista.");
+  await screen.findByText(/Seleziona le riparazioni rientrate dal fornitore/);
   click(screen.getAllByText(`R${anno}-0001`).pop().closest("button"));
   click(await screen.findByText(/Avanti → \(1 selezionata\)/));
   await screen.findByText("💰 Costi e stato");

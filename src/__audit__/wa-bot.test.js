@@ -45,7 +45,10 @@ test("B4 — reconciliation all'avvio: il preventivo accettato mentre il bot era
   const toShop = calls.filter(([to, msg]) => to === SHOP_WA && msg.includes("R2026-0100"));
   expect(toRip).toHaveLength(1);
   expect(toShop).toHaveLength(1);
-  expect(toRip[0][1]).toMatch(/Preventivo al pubblico: 90 €/);
+  // dal 21/07 (6563e44) il riparatore NON riceve il prezzo al pubblico; lo riceve solo il negozio
+  expect(toRip[0][1]).toMatch(/accettato dal cliente/);
+  expect(toRip[0][1]).not.toMatch(/90 €/);
+  expect(toShop[0][1]).toMatch(/90/);
   expect(__fake.db.repairs.find((r) => r.id === "rA").wa_accept_sent_at).toBeTruthy();
 });
 

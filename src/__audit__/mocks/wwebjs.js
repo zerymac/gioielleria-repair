@@ -8,7 +8,7 @@ class Client {
     this.initialized = false;
   }
   on(evt, cb) { this.handlers[evt] = cb; return this; }
-  initialize() { this.initialized = true; }
+  initialize() { this.initialized = true; return Promise.resolve(); }
 }
 class LocalAuth { constructor(opts) { this.opts = opts; } }
 module.exports = { Client, LocalAuth };
