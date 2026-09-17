@@ -123,7 +123,7 @@ const C = {
 
 /* ── API ── */
 const toCustomer = (r) => ({ id:r.id, nome:r.nome, cognome:r.cognome, telefono:r.telefono, telefonoPrefisso:r.telefono_prefisso||"+39", email:r.email, indirizzo:r.indirizzo, codiceFiscale:r.codice_fiscale, note:r.note });
-const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, marca:r.marca||null, referenza:r.referenza||null, notaPreventivo:r.nota_preventivo||null, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, preventivoRifiutato:r.preventivo_rifiutato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null, inGaranzia:r.in_garanzia||false, ddtFornitore:r.ddt_fornitore||null });
+const toRepair = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, categoria:r.categoria, tipoLavoro:r.tipo_lavoro, descrizione:r.descrizione, materiali:r.materiali, marca:r.marca||null, referenza:r.referenza||null, notaPreventivo:r.nota_preventivo||null, problema:r.problema, status:r.status, preventivo:r.preventivo, prezzoFinale:r.prezzo_finale, preventivoAccettato:r.preventivo_accettato||false, preventivoRifiutato:r.preventivo_rifiutato||false, richiestaPreventivo:r.richiesta_preventivo_fornitore||false, riparazioneInterna:r.riparazione_interna||false, spesa:r.spesa, acconto:r.acconto, dataRicevuta:r.data_ricevuta, dataConsegna:r.data_consegna, ddtId:r.ddt_id, note:r.note, fotoUrl:r.foto_url, fotoUrls:(Array.isArray(r.foto_urls)&&r.foto_urls.length?r.foto_urls:(r.foto_url?[r.foto_url]:[])), eliminata:r.eliminata||false, items:r.items||null, mano:r.mano, dito:r.dito, operatore:r.operatore||null, dataSpedita:r.data_spedita||null, dataRientrata:r.data_rientrata||null, dataConsegnata:r.data_consegnata||null, linkToken:r.link_token||null, inGaranzia:r.in_garanzia||false, ddtFornitore:r.ddt_fornitore||null });
 const toDDT = (r) => ({ id:r.id, numero:r.numero, data:r.data, riparatore:r.riparatore, riparazioniIds:r.riparazioni_ids||[], stato:r.stato, dataRientro:r.data_rientro, ddtRientroNumero:r.ddt_rientro_numero||null, note:r.note });
 const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, dataOrdine:r.data_ordine, dataConsegnaPrevista:r.data_consegna_prevista, stato:r.stato||"ordinato", prodotti:r.prodotti||[], acconto:r.acconto, note:r.note, fotoUrl:r.foto_url||null, operatore:r.operatore||null, createdAt:r.created_at });
 
@@ -154,10 +154,11 @@ const api = {
   async upsertRepair(r) {
     const clean=(v)=>(v===""||v===null||v===undefined||isNaN(parseFloat(v)))?null:parseFloat(v);
     const cs=(v)=>(v===""||v===undefined)?null:v;
-    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), marca:cs(r.marca), referenza:cs(r.referenza), nota_preventivo:cs(r.notaPreventivo), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:r.fotoUrl?.startsWith("http")?r.fotoUrl:null, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null, in_garanzia:r.inGaranzia||false, ddt_fornitore:cs(r.ddtFornitore) };
+    const fotos=(Array.isArray(r.fotoUrls)?r.fotoUrls:(r.fotoUrl?[r.fotoUrl]:[])).filter(u=>typeof u==="string"&&u.startsWith("http"));
+    const payload={ id:r.id, numero:r.numero, customer_id:cs(r.customerId), categoria:cs(r.categoria), tipo_lavoro:cs(r.tipoLavoro), descrizione:cs(r.descrizione), materiali:cs(r.materiali), marca:cs(r.marca), referenza:cs(r.referenza), nota_preventivo:cs(r.notaPreventivo), problema:cs(r.problema), status:r.status||"ricevuto", preventivo:clean(r.preventivo), prezzo_finale:clean(r.prezzoFinale), preventivo_accettato:r.preventivoAccettato||false, richiesta_preventivo_fornitore:r.richiestaPreventivo||false, riparazione_interna:r.riparazioneInterna||false, spesa:clean(r.spesa), acconto:clean(r.acconto), data_ricevuta:r.dataRicevuta||null, data_consegna:r.dataConsegna||null, ddt_id:cs(r.ddtId), note:cs(r.note), foto_url:(fotos.length?fotos[0]:null), foto_urls:fotos, eliminata:r.eliminata||false, items:r.items||null, operatore:cs(r.operatore), data_spedita:r.dataSpedita||null, data_rientrata:r.dataRientrata||null, data_consegnata:r.dataConsegnata||null, link_token:r.linkToken||null, in_garanzia:r.inGaranzia||false, ddt_fornitore:cs(r.ddtFornitore) };
     const {error}=await supabase.from("repairs").upsert(payload);
     if(error){
-      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,ddt_fornitore:_df,...rest}=payload;const {error:e2}=await supabase.from("repairs").upsert(rest);_noteWriteErr(e2);}
+      if(error.code==="PGRST204"){const {acconto:_a,riparazione_interna:_ri,operatore:_op,data_spedita:_ds,data_rientrata:_dr,data_consegnata:_dc,link_token:_lt,marca:_ma,referenza:_ref,nota_preventivo:_np,in_garanzia:_ig,ddt_fornitore:_df,foto_urls:_fu,...rest}=payload;const {error:e2}=await supabase.from("repairs").upsert(rest);_noteWriteErr(e2);}
       else _noteWriteErr(error);
     }
   },
@@ -277,9 +278,16 @@ const WIZARD_DRAFT_TTL=12*60*60*1000;
 /* Ultimo errore di upload foto, letto da chi salva per avvisare l'operatore
    (l'upload fallito non deve bloccare il salvataggio della riparazione). */
 let _lastPhotoError=null;
-async function uploadPhoto(blob,repairId) {
+const MAX_FOTO=6;
+/* URL pubblico → path nel bucket (senza ?v=cache-buster). */
+function photoPathFromUrl(url){ const m=/\/repair-photos\/([^?]+)/.exec(url||""); return m?decodeURIComponent(m[1]):null; }
+async function deletePhoto(url){
+  const path=photoPathFromUrl(url); if(!path) return true;
+  try { const {error}=await supabase.storage.from("repair-photos").remove([path]); if(error){console.error(error);return false;} return true; } catch(e){console.error(e);return false;}
+}
+async function uploadPhoto(blob,repairId,suffix="") {
   _lastPhotoError=null;
-  try { const path=`repairs/${repairId}.jpg`; const {error}=await supabase.storage.from("repair-photos").upload(path,blob,{upsert:true,contentType:"image/jpeg"}); if(error){console.error(error);_lastPhotoError=error.message||String(error);return null;} const {data}=supabase.storage.from("repair-photos").getPublicUrl(path); return data.publicUrl; } catch(e){console.error(e);_lastPhotoError=e?.message||String(e);return null;}
+  try { const path=`repairs/${repairId}${suffix?"-"+suffix:""}.jpg`; const {error}=await supabase.storage.from("repair-photos").upload(path,blob,{upsert:true,contentType:"image/jpeg"}); if(error){console.error(error);_lastPhotoError=error.message||String(error);return null;} const {data}=supabase.storage.from("repair-photos").getPublicUrl(path); return data.publicUrl; } catch(e){console.error(e);_lastPhotoError=e?.message||String(e);return null;}
 }
 
 /* Rende assoluto un URL relativo (necessario per logo in finestre esterne) */
@@ -1036,6 +1044,44 @@ function WAToast({repair,customer,onDismiss,customMsg,label,isMD}) {
 }
 
 /* ── RepairCard ── */
+/* Galleria foto: miniature a griglia, tap = ingrandisci, ✕ = elimina (con conferma se confirmRemove). */
+function PhotoGrid({fotos,onRemove,confirmRemove=false}) {
+  const [open,setOpen]=useState(null);
+  const [ask,setAsk]=useState(null);
+  if(!fotos||!fotos.length) return null;
+  const single=fotos.length===1;
+  return (
+    <>
+      <div style={{display:"grid",gridTemplateColumns:single?"1fr":"repeat(auto-fill,minmax(96px,1fr))",gap:8}}>
+        {fotos.map((u,i)=>(
+          <div key={u+i} style={{position:"relative",borderRadius:14,overflow:"hidden",background:"#EEE"}}>
+            <img src={u} alt={`foto ${i+1}`} onClick={()=>setOpen(i)} style={{width:"100%",height:single?"auto":96,maxHeight:single?180:96,objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+            {onRemove&&(ask===i
+              ?<div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:6}}>
+                 <div style={{color:"white",fontSize:12,fontWeight:700}}>Eliminare?</div>
+                 <div style={{display:"flex",gap:6}}>
+                   <button onClick={()=>{setAsk(null);onRemove(i);}} style={{background:"#DC2626",color:"white",border:"none",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sì</button>
+                   <button onClick={()=>setAsk(null)} style={{background:"white",color:"#111",border:"none",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>No</button>
+                 </div>
+               </div>
+              :<button aria-label={`Elimina foto ${i+1}`} onClick={()=>confirmRemove?setAsk(i):onRemove(i)} style={{position:"absolute",top:6,right:6,width:26,height:26,borderRadius:13,border:"none",background:"rgba(0,0,0,.55)",color:"white",fontSize:14,fontWeight:700,cursor:"pointer",lineHeight:"26px",padding:0}}>✕</button>)}
+          </div>
+        ))}
+      </div>
+      {open!=null&&fotos[open]&&(
+        <div onClick={()=>setOpen(null)} style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.92)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",cursor:"zoom-out"}}>
+          <img src={fotos[open]} alt={`foto ${open+1}`} style={{maxWidth:"96vw",maxHeight:"84vh",objectFit:"contain",borderRadius:8}}/>
+          <div style={{color:"white",marginTop:12,fontSize:14,display:"flex",gap:18,alignItems:"center"}}>
+            {fotos.length>1&&<button onClick={(e)=>{e.stopPropagation();setOpen((open-1+fotos.length)%fotos.length);}} style={{background:"rgba(255,255,255,.15)",color:"white",border:"none",borderRadius:20,padding:"8px 16px",fontSize:16,cursor:"pointer"}}>‹</button>}
+            <span>{open+1} / {fotos.length}</span>
+            {fotos.length>1&&<button onClick={(e)=>{e.stopPropagation();setOpen((open+1)%fotos.length);}} style={{background:"rgba(255,255,255,.15)",color:"white",border:"none",borderRadius:20,padding:"8px 16px",fontSize:16,cursor:"pointer"}}>›</button>}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function RepairCard({repair:r,customer:c,ddt,onPress,onReceipt}) {
   const isOverdue=r.status!=="consegnato"&&r.status!=="pronto"&&r.dataConsegna&&r.dataConsegna<today();
   const catIcon=CATS.find(x=>x.id===r.categoria)?.icon||"💍";
@@ -1104,14 +1150,13 @@ function RingDetailModal({form,set,onConfirm,onSkip}) {
 function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCustomer}) {
   const TOTAL=7;
   const [step,setStep]=useState(0);
-  const [form,setForm]=useState({operatore:"",customerId:"",categoria:"",tipoLavoro:"",descrizione:"",materiali:"",marca:"",referenza:"",problema:"",preventivo:"",notaPreventivo:"",preventivoAccettato:false,richiestaPreventivo:false,riparazioneInterna:false,inGaranzia:false,dataConsegna:"",note:"",fotoUrl:"",fotoBlob:null,mano:"",dito:"",items:[]});
+  const [form,setForm]=useState({operatore:"",customerId:"",categoria:"",tipoLavoro:"",descrizione:"",materiali:"",marca:"",referenza:"",problema:"",preventivo:"",notaPreventivo:"",preventivoAccettato:false,richiestaPreventivo:false,riparazioneInterna:false,inGaranzia:false,dataConsegna:"",note:"",fotos:[],mano:"",dito:"",items:[]});
   const [search,setSearch]=useState("");
   const [showNew,setShowNew]=useState(false);
   const [newC,setNewC]=useState({nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",codiceFiscale:""});
   const [dupWarn,setDupWarn]=useState(null);
   const [docB64,setDocB64]=useState(null); const [docMsg,setDocMsg]=useState(""); const [docLoad,setDocLoad]=useState(false);
   const [aiLoad,setAiLoad]=useState(false); const [aiMsg,setAiMsg]=useState("");
-  const [imgPreview,setImgPreview]=useState(null);
   /* Bozza in localStorage: su iPhone Safari spesso RICARICA la pagina al ritorno
      dalla fotocamera e il wizard ripartiva vuoto (foto persa senza avviso).
      Salvata a ogni modifica (foto come dataURL), ripristinata al mount, cancellata
@@ -1123,13 +1168,10 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
       if(raw){
         const d=JSON.parse(raw);
         const fresh=d&&d.ts&&(Date.now()-d.ts)<WIZARD_DRAFT_TTL;
-        const meaningful=d&&d.form&&(d.step>0||d.form.customerId||d.form.descrizione||d.form.fotoUrl||(d.form.items||[]).length);
+        const meaningful=d&&d.form&&(d.step>0||d.form.customerId||d.form.descrizione||(d.form.fotos||[]).length||(d.form.items||[]).length);
         if(fresh&&meaningful){
-          const f={...d.form,fotoBlob:null};
-          if(f.fotoUrl&&f.fotoUrl.startsWith("data:")){
-            setImgPreview(f.fotoUrl);
-            const b=dataURLToBlob(f.fotoUrl); if(b&&b.size) f.fotoBlob=b;
-          }
+          const f={...d.form}; delete f.fotoUrl; delete f.fotoBlob;
+          f.fotos=(Array.isArray(f.fotos)?f.fotos:[]).filter(u=>typeof u==="string"&&u.startsWith("data:"));
           setForm(x=>({...x,...f}));
           setStep(d.step||0);
           showToast("↩️ Bozza riparazione ripristinata",'#2563EB',3500);
@@ -1142,8 +1184,8 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
   useEffect(()=>{
     if(!draftReady.current)return;
     try {
-      const {fotoBlob:_b,...rest}=form;
-      const meaningful=step>0||rest.customerId||rest.descrizione||rest.fotoUrl||(rest.items||[]).length;
+      const rest=form;
+      const meaningful=step>0||rest.customerId||rest.descrizione||(rest.fotos||[]).length||(rest.items||[]).length;
       if(meaningful) localStorage.setItem(WIZARD_DRAFT_KEY,JSON.stringify({ts:Date.now(),step,form:rest}));
       else localStorage.removeItem(WIZARD_DRAFT_KEY);
     } catch(_){}
@@ -1170,7 +1212,7 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
 
   const catalogAI=async()=>{
     setAiLoad(true);setAiMsg("");
-    const b64=imgPreview?imgPreview.split(",")[1]:null;
+    const b64=form.fotos?.[0]?form.fotos[0].split(",")[1]:null;
     const res=await aiCall(`Sei un esperto gioielliere. ${b64?"Analizza questa immagine":`Analizza: "${form.descrizione}"`} rispondi SOLO con JSON: {"descrizione":"","materiali":"","problema":""}`,b64);
     if(!res){setAiMsg("⚠️ AI non configurata");setAiLoad(false);return;}
     try{const j=JSON.parse(res.replace(/```json|```/g,"").trim());setForm(f=>({...f,...Object.fromEntries(Object.entries(j).filter(([,v])=>v))}));setAiMsg("✅ Suggerimenti AI applicati");}
@@ -1179,14 +1221,21 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
   };
 
   const handleFoto=async(e)=>{
-    const file=e.target.files?.[0];if(!file)return;
+    const files=Array.from(e.target.files||[]);if(!files.length)return;
     e.target.value="";
-    const blob=await preparePhoto(file);
-    if(!blob){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
-    let dataUrl=null; try{dataUrl=await blobToDataURL(blob);}catch(_){}
-    if(!dataUrl){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
-    setImgPreview(dataUrl);set("fotoBlob",blob);set("fotoUrl",dataUrl);
+    const room=MAX_FOTO-(form.fotos||[]).length;
+    if(room<=0){showToast(`⚠️ Massimo ${MAX_FOTO} foto per riparazione`,'#DC2626',4000);return;}
+    const added=[]; let bad=0;
+    for(const file of files.slice(0,room)){
+      const blob=await preparePhoto(file);
+      let dataUrl=null; if(blob){try{dataUrl=await blobToDataURL(blob);}catch(_){}}
+      if(dataUrl) added.push(dataUrl); else bad++;
+    }
+    if(added.length) setForm(f=>({...f,fotos:[...(f.fotos||[]),...added].slice(0,MAX_FOTO)}));
+    if(bad) showToast(`⚠️ ${bad===1?"Una foto non è leggibile":bad+" foto non sono leggibili"}: riprova`,'#DC2626',5000);
+    if(files.length>room) showToast(`⚠️ Massimo ${MAX_FOTO} foto: le altre sono state ignorate`,'#DC2626',4000);
   };
+  const removeFoto=(i)=>setForm(f=>({...f,fotos:(f.fotos||[]).filter((_,k)=>k!==i)}));
 
   const addCurrentItem=()=>{
     const item={categoria:form.categoria,tipoLavoro:form.tipoLavoro,descrizione:form.descrizione,materiali:form.materiali,marca:form.marca,referenza:form.referenza,problema:form.problema,mano:form.mano,dito:form.dito};
@@ -1339,11 +1388,12 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
         <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Aggiungi foto e descrizione</div>
         {form.mano&&<div style={{background:"#EFF6FF",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#1D4ED8",fontWeight:600}}>💍 Mano {form.mano} · {form.dito}</div>}
         <div style={{marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:8}}>📷 Foto oggetto</div>
-          <button onClick={()=>fotoRef.current.click()} style={{width:"100%",border:"2px dashed #C9A227",borderRadius:16,padding:imgPreview?0:"20px",background:"#FDF6DC",cursor:"pointer",overflow:"hidden",minHeight:80,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            {imgPreview?<img src={imgPreview} alt="oggetto" style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:14}}/>:<div style={{textAlign:"center"}}><div style={{fontSize:36}}>📷</div><div style={{fontSize:14,color:"#B8860B",fontWeight:600,marginTop:6}}>Scatta o carica foto</div></div>}
-          </button>
-          <input ref={fotoRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleFoto}/>
+          <div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:8}}>📷 Foto oggetto{form.fotos?.length?` (${form.fotos.length}/${MAX_FOTO})`:""}</div>
+          <PhotoGrid fotos={form.fotos||[]} onRemove={removeFoto}/>
+          {(form.fotos||[]).length<MAX_FOTO&&<button onClick={()=>fotoRef.current.click()} style={{width:"100%",border:"2px dashed #C9A227",borderRadius:16,padding:form.fotos?.length?"12px":"20px",background:"#FDF6DC",cursor:"pointer",minHeight:form.fotos?.length?0:80,display:"flex",alignItems:"center",justifyContent:"center",marginTop:form.fotos?.length?8:0}}>
+            <div style={{textAlign:"center"}}>{!form.fotos?.length&&<div style={{fontSize:36}}>📷</div>}<div style={{fontSize:14,color:"#B8860B",fontWeight:600,marginTop:form.fotos?.length?0:6}}>{form.fotos?.length?"📷 Aggiungi un'altra foto":"Scatta o carica foto"}</div></div>
+          </button>}
+          <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple style={{display:"none"}} onChange={handleFoto}/>
         </div>
         {aiEnabled&&(
           <div style={{background:"#FDF6DC",borderRadius:16,padding:14,marginBottom:16,border:"1px solid #F5E88A"}}>
@@ -1397,7 +1447,7 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
       {step===7&&<div>
         <div style={{fontSize:24,fontWeight:800,color:C.label,marginBottom:6}}>Tutto pronto!</div>
         <div style={{fontSize:15,color:C.secondary,marginBottom:20}}>Controlla il riepilogo</div>
-        {form.fotoUrl&&<img src={form.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:16,marginBottom:12}}/>}
+        {(form.fotos||[]).length>0&&<div style={{marginBottom:12}}><PhotoGrid fotos={form.fotos}/></div>}
         <IOSCard style={{marginBottom:12}}><IOSRow icon="👤" label="Cliente" value={selC?selC.nome+" "+selC.cognome:"—"} last/></IOSCard>
         <IOSCard style={{marginBottom:12}}>
           <IOSRow icon={CATS.find(c=>c.id===form.categoria)?.icon||"💎"} label="Categoria" value={form.categoria}/>
@@ -2323,32 +2373,47 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   const saveSpesa=()=>{onSpesaChange&&onSpesaChange(r.id,spesaInput===""?null:parseFloat(spesaInput)||null);setEditSpesa(false);};
   const startEditDdtForn=()=>{setDdtFornInput(r.ddtFornitore||"");setEditDdtForn(true);};
   const saveDdtForn=()=>{onFieldChange&&onFieldChange(r.id,{ddtFornitore:ddtFornInput.trim()||null});setEditDdtForn(false);};
-  /* Foto dal dettaglio: per riparazioni create senza foto (o da sostituire). */
+  /* Foto dal dettaglio: aggiungi (anche più d'una) ed elimina. */
+  const fotos=Array.isArray(r.fotoUrls)&&r.fotoUrls.length?r.fotoUrls:(r.fotoUrl?[r.fotoUrl]:[]);
   const fotoDetRef=useRef(); const [fotoBusy,setFotoBusy]=useState(false);
+  const saveFotos=(list)=>onFieldChange&&onFieldChange(r.id,{fotoUrls:list,fotoUrl:list[0]||null});
   const handleDetailFoto=async(e)=>{
-    const file=e.target.files?.[0];if(!file)return;
+    const files=Array.from(e.target.files||[]);if(!files.length)return;
     e.target.value="";
+    const room=MAX_FOTO-fotos.length;
+    if(room<=0){showToast(`⚠️ Massimo ${MAX_FOTO} foto per riparazione`,'#DC2626',4000);return;}
     setFotoBusy(true);
     try {
-      const blob=await preparePhoto(file);
-      if(!blob){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
-      const url=await uploadPhoto(blob,r.id);
-      if(!url){showToast(`⚠️ Foto non salvata${_lastPhotoError?` (${_lastPhotoError})`:""}`,'#DC2626',7000);return;}
-      /* stesso path su storage (upsert): il ?v= evita la cache del browser sulla vecchia immagine */
-      onFieldChange&&onFieldChange(r.id,{fotoUrl:`${url}?v=${Date.now()}`});
-      showToast("📷 Foto salvata");
+      const urls=[]; let bad=0, failed=0; const stamp=Date.now();
+      for(let k=0;k<Math.min(files.length,room);k++){
+        const blob=await preparePhoto(files[k]);
+        if(!blob){bad++;continue;}
+        /* nome univoco: niente sovrascritture né cache stantia */
+        const url=await uploadPhoto(blob,r.id,`${stamp}${k?"-"+k:""}`);
+        if(url) urls.push(url); else failed++;
+      }
+      if(urls.length){ saveFotos([...fotos,...urls]); showToast(urls.length===1?"📷 Foto salvata":`📷 ${urls.length} foto salvate`); }
+      if(bad) showToast(`⚠️ ${bad===1?"Una foto non è leggibile":bad+" foto non sono leggibili"}`,'#DC2626',5000);
+      if(failed) showToast(`⚠️ ${failed===1?"Una foto non è stata salvata":failed+" foto non sono state salvate"}${_lastPhotoError?` (${_lastPhotoError})`:""}`,'#DC2626',7000);
+      if(files.length>room) showToast(`⚠️ Massimo ${MAX_FOTO} foto: le altre sono state ignorate`,'#DC2626',4000);
     } finally { setFotoBusy(false); }
+  };
+  const handleDeleteFoto=async(i)=>{
+    const url=fotos[i]; const rest=fotos.filter((_,k)=>k!==i);
+    saveFotos(rest);
+    const ok=await deletePhoto(url);
+    showToast(ok?"🗑️ Foto eliminata":"🗑️ Foto tolta dalla scheda (file non rimosso dallo storage)",ok?'#059669':'#D97706',ok?2500:5000);
   };
   const startEditFinale=()=>{setFinaleInput(r.prezzoFinale!=null?String(r.prezzoFinale):"");setEditFinale(true);};
   const saveFinale=()=>{onPrezzoFinaleChange&&onPrezzoFinaleChange(r.id,finaleInput===""?null:parseFloat(finaleInput)||null);setEditFinale(false);};
   return (
     <Sheet onClose={onClose} title={r.numero}>
-      {r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:14,marginBottom:6}}/>}
-      {onFieldChange&&<div style={{marginBottom:12,textAlign:r.fotoUrl?"right":"left"}}>
-        <button onClick={()=>fotoDetRef.current&&fotoDetRef.current.click()} disabled={fotoBusy} style={{background:r.fotoUrl?"none":"#FDF6DC",border:r.fotoUrl?"none":"2px dashed #C9A227",borderRadius:12,padding:r.fotoUrl?"4px 0":"12px 14px",width:r.fotoUrl?"auto":"100%",color:"#B8860B",fontSize:14,fontWeight:600,cursor:fotoBusy?"default":"pointer",opacity:fotoBusy?.6:1,fontFamily:"inherit"}}>
-          {fotoBusy?"⏳ Salvataggio foto…":r.fotoUrl?"📷 Sostituisci foto":"📷 Aggiungi foto dell'oggetto"}
+      {fotos.length>0&&<PhotoGrid fotos={fotos} onRemove={onFieldChange?handleDeleteFoto:undefined} confirmRemove/>}
+      {onFieldChange&&fotos.length<MAX_FOTO&&<div style={{marginBottom:12,marginTop:fotos.length?6:0,textAlign:fotos.length?"right":"left"}}>
+        <button onClick={()=>fotoDetRef.current&&fotoDetRef.current.click()} disabled={fotoBusy} style={{background:fotos.length?"none":"#FDF6DC",border:fotos.length?"none":"2px dashed #C9A227",borderRadius:12,padding:fotos.length?"4px 0":"12px 14px",width:fotos.length?"auto":"100%",color:"#B8860B",fontSize:14,fontWeight:600,cursor:fotoBusy?"default":"pointer",opacity:fotoBusy?.6:1,fontFamily:"inherit"}}>
+          {fotoBusy?"⏳ Salvataggio foto…":fotos.length?"📷 Aggiungi foto":"📷 Aggiungi foto dell'oggetto"}
         </button>
-        <input ref={fotoDetRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleDetailFoto}/>
+        <input ref={fotoDetRef} type="file" accept="image/*" capture="environment" multiple style={{display:"none"}} onChange={handleDetailFoto}/>
       </div>}
       <div style={{display:"flex",alignItems:"flex-start",gap:14,background:C.white,borderRadius:20,padding:16,marginBottom:12}}>
         <div style={{width:54,height:54,borderRadius:27,background:STATUSES[r.status]?.bg||"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0}}>{catIcon}</div>
@@ -4746,7 +4811,16 @@ function MainApp() {
       const id=uid();
       const linkToken=(()=>{try{return crypto.randomUUID();}catch(e){return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16));}})();
       const n={id,numero,customerId:form.customerId,categoria:item.categoria,tipoLavoro:item.tipoLavoro,descrizione:item.descrizione,materiali:item.materiali,marca:item.marca,referenza:item.referenza,notaPreventivo:form.notaPreventivo,problema:item.problema,mano:item.mano,dito:item.dito,preventivo:form.preventivo,preventivoAccettato:form.preventivoAccettato,richiestaPreventivo:form.richiestaPreventivo,inGaranzia:form.inGaranzia||false,dataConsegna:form.dataConsegna,note:form.note,status:"ricevuto",dataRicevuta:today(),items:null,operatore:form.operatore||null,linkToken};
-      if(i===0&&form.fotoBlob){const url=await uploadPhoto(form.fotoBlob,n.id);if(url)n.fotoUrl=url;else showToast(`⚠️ Foto non salvata${_lastPhotoError?` (${_lastPhotoError})`:""}. Riparazione registrata senza foto.`,'#DC2626',7000);}
+      if(i===0&&(form.fotos||[]).length){
+        const urls=[]; let failed=0;
+        for(let k=0;k<form.fotos.length;k++){
+          const blob=dataURLToBlob(form.fotos[k]);
+          const url=blob&&blob.size?await uploadPhoto(blob,n.id,k?String(k):""):null;
+          if(url) urls.push(url); else failed++;
+        }
+        n.fotoUrls=urls; n.fotoUrl=urls[0]||null;
+        if(failed) showToast(`⚠️ ${failed===1?"Una foto non è stata salvata":failed+" foto non sono state salvate"}${_lastPhotoError?` (${_lastPhotoError})`:""}. Riparazione registrata${urls.length?" con le altre foto":" senza foto"}.`,'#DC2626',7000);
+      }
       await api.upsertRepair(n);
       savedRepairs.push(n);
     }

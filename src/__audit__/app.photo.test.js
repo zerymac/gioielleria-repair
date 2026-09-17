@@ -52,11 +52,13 @@ test("FIX foto — bozza wizard: dopo un reload (remount) descrizione e foto tor
   // scatta la foto (input nascosto del passo "Descrivi l'oggetto")
   const fotoInput = fileInputs().find((i) => i.previousSibling && /Scatta o carica foto/.test(i.previousSibling.textContent || ""));
   expect(fotoInput).toBeTruthy();
-  fireEvent.change(fotoInput, { target: { files: [fakePhoto()] } });
-  await waitFor(() => expect(screen.getByAltText("oggetto").getAttribute("src")).toMatch(/^data:image\/jpeg/));
+  fireEvent.change(fotoInput, { target: { files: [fakePhoto(), fakePhoto()] } });
+  await waitFor(() => expect(screen.getAllByAltText(/^foto \d$/)).toHaveLength(2));
+  expect(screen.getByAltText("foto 1").getAttribute("src")).toMatch(/^data:image\/jpeg/);
+  expect(screen.getByText("📷 Foto oggetto (2/6)")).toBeTruthy();
 
-  // la bozza è su disco, foto inclusa
-  await waitFor(() => expect(JSON.parse(localStorage.getItem("repairWizardDraft")).form.fotoUrl).toMatch(/^data:/));
+  // la bozza è su disco, foto incluse
+  await waitFor(() => expect(JSON.parse(localStorage.getItem("repairWizardDraft")).form.fotos).toHaveLength(2));
 
   // "Safari ricarica la pagina": smonta tutto e rimonta
   first.unmount();
@@ -65,7 +67,10 @@ test("FIX foto — bozza wizard: dopo un reload (remount) descrizione e foto tor
   click(screen.getByText("+ Nuova Riparazione"));
   await screen.findByText("Descrivi l'oggetto");
   expect(screen.getByPlaceholderText("Es. Anello in oro giallo con solitario brillante…").value).toBe("Anello con foto");
-  expect(screen.getByAltText("oggetto").getAttribute("src")).toMatch(/^data:image\/jpeg/);
+  expect(screen.getAllByAltText(/^foto \d$/)).toHaveLength(2);
+  // togli la seconda dal wizard (nessuna conferma qui: non è ancora salvata)
+  click(screen.getByLabelText("Elimina foto 2"));
+  await waitFor(() => expect(screen.getAllByAltText(/^foto \d$/)).toHaveLength(1));
 
   // completa e salva
   click(screen.getByText("Avanti →"));
@@ -82,6 +87,8 @@ test("FIX foto — bozza wizard: dopo un reload (remount) descrizione e foto tor
   expect(r.numero).toBe(`R${anno}-0001`);
   expect(r.descrizione).toBe("Anello con foto");
   expect(r.foto_url).toBe(`https://fake.storage.local/repair-photos/repairs/${r.id}.jpg`);
+  expect(r.foto_urls).toEqual([`https://fake.storage.local/repair-photos/repairs/${r.id}.jpg`]);
+  expect(__fake.storageOps.filter((o) => o.op === "upload")).toHaveLength(1);
   // bozza cancellata dopo il salvataggio
   expect(localStorage.getItem("repairWizardDraft")).toBeNull();
 });
@@ -100,17 +107,48 @@ test("FIX foto — annulla esplicito del wizard butta la bozza", async () => {
   expect(localStorage.getItem("repairWizardDraft")).toBeNull();
 });
 
-test("FIX foto — dal dettaglio: 'Aggiungi foto dell'oggetto' carica sullo storage e salva foto_url", async () => {
-  __fake.seed("repairs", [{ id: "r578", numero: `R${anno}-0578`, customer_id: "c1", categoria: "Gioiello", descrizione: "Anello senza foto", status: "ricevuto", eliminata: false, data_ricevuta: "2026-09-16", foto_url: null }]);
+test("FIX foto — dal dettaglio: aggiungi due foto (nomi univoci), foto_url = la prima, poi elimina la prima: storage remove + scheda aggiornata", async () => {
+  __fake.seed("repairs", [{ id: "r578", numero: `R${anno}-0578`, customer_id: "c1", categoria: "Gioiello", descrizione: "Anello senza foto", status: "ricevuto", eliminata: false, data_ricevuta: "2026-09-16", foto_url: null, foto_urls: [] }]);
   render(<App />);
   await unlockAndLoad();
   click(screen.getAllByText(`R${anno}-0578`)[0]);
   const btn = await screen.findByText("📷 Aggiungi foto dell'oggetto");
   const input = btn.parentElement.querySelector('input[type="file"]');
   expect(input).toBeTruthy();
-  fireEvent.change(input, { target: { files: [fakePhoto()] } });
+  expect(input.multiple).toBe(true);
+  fireEvent.change(input, { target: { files: [fakePhoto(), fakePhoto()] } });
 
-  await waitFor(() => expect(__fake.db.repairs.find((x) => x.id === "r578").foto_url).toMatch(/^https:\/\/fake\.storage\.local\/repair-photos\/repairs\/r578\.jpg\?v=\d+$/));
-  await screen.findByText("📷 Sostituisci foto");
-  expect(screen.getByAltText("oggetto").getAttribute("src")).toMatch(/repairs\/r578\.jpg\?v=/);
+  const row = () => __fake.db.repairs.find((x) => x.id === "r578");
+  await waitFor(() => expect(row().foto_urls).toHaveLength(2));
+  const [u1, u2] = row().foto_urls;
+  expect(u1).toMatch(/^https:\/\/fake\.storage\.local\/repair-photos\/repairs\/r578-\d+\.jpg$/);
+  expect(u2).toMatch(/^https:\/\/fake\.storage\.local\/repair-photos\/repairs\/r578-\d+-1\.jpg$/);
+  expect(row().foto_url).toBe(u1);
+  await screen.findByText("📷 Aggiungi foto");
+  expect(screen.getAllByAltText(/^foto \d$/)).toHaveLength(2);
+
+  // elimina la prima: chiede conferma, poi remove sullo storage e foto_url passa alla seconda
+  click(screen.getByLabelText("Elimina foto 1"));
+  click(await screen.findByText("Sì"));
+  await waitFor(() => expect(row().foto_urls).toEqual([u2]));
+  expect(row().foto_url).toBe(u2);
+  const rm = __fake.storageOps.filter((o) => o.op === "remove");
+  expect(rm).toHaveLength(1);
+  expect(rm[0].paths).toEqual([u1.replace("https://fake.storage.local/repair-photos/", "")]);
+  await waitFor(() => expect(screen.getAllByAltText(/^foto \d$/)).toHaveLength(1));
+});
+
+test("Retro-compat — riparazione vecchia con solo foto_url: la scheda la mostra e un'aggiunta la conserva in foto_urls", async () => {
+  __fake.seed("repairs", [{ id: "r570", numero: `R${anno}-0570`, customer_id: "c1", categoria: "Gioiello", descrizione: "Vecchia", status: "ricevuto", eliminata: false, data_ricevuta: "2026-09-15", foto_url: "https://fake.storage.local/repair-photos/repairs/r570.jpg" }]);
+  render(<App />);
+  await unlockAndLoad();
+  click(screen.getAllByText(`R${anno}-0570`)[0]);
+  await screen.findByText("📷 Aggiungi foto");
+  expect(screen.getByAltText("foto 1").getAttribute("src")).toBe("https://fake.storage.local/repair-photos/repairs/r570.jpg");
+  const input = screen.getByText("📷 Aggiungi foto").parentElement.querySelector('input[type="file"]');
+  fireEvent.change(input, { target: { files: [fakePhoto()] } });
+  await waitFor(() => expect(__fake.db.repairs.find((x) => x.id === "r570").foto_urls).toHaveLength(2));
+  const r = __fake.db.repairs.find((x) => x.id === "r570");
+  expect(r.foto_urls[0]).toBe("https://fake.storage.local/repair-photos/repairs/r570.jpg");
+  expect(r.foto_url).toBe("https://fake.storage.local/repair-photos/repairs/r570.jpg");
 });

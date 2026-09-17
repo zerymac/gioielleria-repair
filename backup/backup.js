@@ -63,6 +63,7 @@ create table if not exists public.repairs (
   ddt_id                            text,
   note                              text,
   foto_url                          text,
+  foto_urls                         jsonb not null default '[]'::jsonb,
   eliminata                         boolean default false,
   items                             jsonb,
   mano                              text,

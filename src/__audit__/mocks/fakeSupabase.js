@@ -128,6 +128,7 @@ const auth = {
 };
 
 const channels = [];
+const storageOps = [];
 const supabase = {
   from: (table) => new Query(table),
   auth,
@@ -143,7 +144,8 @@ const supabase = {
   removeChannel: () => {},
   storage: {
     from: (bucket) => ({
-      upload: async () => ({ error: null }),
+      upload: async (path) => { storageOps.push({ op: "upload", bucket, path }); return { error: null }; },
+      remove: async (paths) => { storageOps.push({ op: "remove", bucket, paths }); return { error: null } },
       getPublicUrl: (path) => ({ data: { publicUrl: `https://fake.storage.local/${bucket}/${path}` } }),
     }),
   },
@@ -151,8 +153,10 @@ const supabase = {
 
 const __fake = {
   db,
+  storageOps,
   reset() {
     for (const k of Object.keys(db)) db[k] = [];
+    storageOps.length = 0;
     realtimeHandlers.length = 0;
     channels.length = 0;
     fakeSession = null; authListeners.length = 0;
