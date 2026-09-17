@@ -226,11 +226,54 @@ async function aiCall(prompt,b64=null,mt="image/jpeg") {
 const aiEnabled=true;
 
 /* ── Utils ── */
+/* Risolve SEMPRE: null se l'immagine non è leggibile (es. formato non decodificabile
+   dal browser) o se la canvas non produce il blob. Il chiamante ripiega sul file
+   originale o avvisa l'operatore: prima una foto illeggibile lasciava la Promise
+   appesa e la riparazione veniva salvata senza foto, in silenzio. */
 function compressImage(file,maxPx=800,quality=0.7) {
-  return new Promise((resolve)=>{ const reader=new FileReader(); reader.onload=(e)=>{ const img=new Image(); img.onload=()=>{ const ratio=Math.min(maxPx/img.width,maxPx/img.height,1); const canvas=document.createElement("canvas"); canvas.width=img.width*ratio; canvas.height=img.height*ratio; canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height); canvas.toBlob((blob)=>resolve(blob),"image/jpeg",quality); }; img.src=e.target.result; }; reader.readAsDataURL(file); });
+  return new Promise((resolve)=>{
+    try {
+      const reader=new FileReader();
+      reader.onerror=()=>resolve(null);
+      reader.onload=(e)=>{
+        const img=new Image();
+        img.onerror=()=>resolve(null);
+        img.onload=()=>{
+          try {
+            const ratio=Math.min(maxPx/img.width,maxPx/img.height,1);
+            const canvas=document.createElement("canvas"); canvas.width=img.width*ratio; canvas.height=img.height*ratio;
+            canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+            canvas.toBlob((blob)=>resolve(blob||null),"image/jpeg",quality);
+          } catch(err){ resolve(null); }
+        };
+        img.src=e.target.result;
+      };
+      reader.readAsDataURL(file);
+    } catch(err){ resolve(null); }
+  });
+}
+/* Foto pronta per l'upload: compressa, oppure il file originale se la compressione
+   fallisce ma il file è comunque un'immagine; null se non c'è nulla di usabile. */
+async function preparePhoto(file) {
+  const blob=await compressImage(file,800,0.7);
+  if(blob) return blob;
+  if(file&&file.size>0&&(file.type||"").startsWith("image/")) return file;
+  return null;
 }
 const blobToDataURL=(blob)=>new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(blob);});
+/* Inverso sincrono (niente fetch su data: URL, che non è affidabile ovunque). */
+function dataURLToBlob(dataUrl) {
+  try {
+    const m=/^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl||""); if(!m) return null;
+    const mime=m[1]||"application/octet-stream";
+    const bin=m[2]?atob(m[3]):decodeURIComponent(m[3]);
+    const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+    return new Blob([arr],{type:mime});
+  } catch(e){ return null; }
+}
 
+const WIZARD_DRAFT_KEY="repairWizardDraft";
+const WIZARD_DRAFT_TTL=12*60*60*1000;
 /* Ultimo errore di upload foto, letto da chi salva per avvisare l'operatore
    (l'upload fallito non deve bloccare il salvataggio della riparazione). */
 let _lastPhotoError=null;
@@ -1069,6 +1112,44 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
   const [docB64,setDocB64]=useState(null); const [docMsg,setDocMsg]=useState(""); const [docLoad,setDocLoad]=useState(false);
   const [aiLoad,setAiLoad]=useState(false); const [aiMsg,setAiMsg]=useState("");
   const [imgPreview,setImgPreview]=useState(null);
+  /* Bozza in localStorage: su iPhone Safari spesso RICARICA la pagina al ritorno
+     dalla fotocamera e il wizard ripartiva vuoto (foto persa senza avviso).
+     Salvata a ogni modifica (foto come dataURL), ripristinata al mount, cancellata
+     al salvataggio o all'annulla esplicito. */
+  const draftReady=useRef(false);
+  useEffect(()=>{
+    try {
+      const raw=localStorage.getItem(WIZARD_DRAFT_KEY);
+      if(raw){
+        const d=JSON.parse(raw);
+        const fresh=d&&d.ts&&(Date.now()-d.ts)<WIZARD_DRAFT_TTL;
+        const meaningful=d&&d.form&&(d.step>0||d.form.customerId||d.form.descrizione||d.form.fotoUrl||(d.form.items||[]).length);
+        if(fresh&&meaningful){
+          const f={...d.form,fotoBlob:null};
+          if(f.fotoUrl&&f.fotoUrl.startsWith("data:")){
+            setImgPreview(f.fotoUrl);
+            const b=dataURLToBlob(f.fotoUrl); if(b&&b.size) f.fotoBlob=b;
+          }
+          setForm(x=>({...x,...f}));
+          setStep(d.step||0);
+          showToast("↩️ Bozza riparazione ripristinata",'#2563EB',3500);
+        } else localStorage.removeItem(WIZARD_DRAFT_KEY);
+      }
+    } catch(_){ try{localStorage.removeItem(WIZARD_DRAFT_KEY);}catch(__){} }
+    draftReady.current=true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+  useEffect(()=>{
+    if(!draftReady.current)return;
+    try {
+      const {fotoBlob:_b,...rest}=form;
+      const meaningful=step>0||rest.customerId||rest.descrizione||rest.fotoUrl||(rest.items||[]).length;
+      if(meaningful) localStorage.setItem(WIZARD_DRAFT_KEY,JSON.stringify({ts:Date.now(),step,form:rest}));
+      else localStorage.removeItem(WIZARD_DRAFT_KEY);
+    } catch(_){}
+  },[form,step]);
+  const clearDraft=()=>{try{localStorage.removeItem(WIZARD_DRAFT_KEY);}catch(_){}};
+  const closeWizard=()=>{clearDraft();onClose();};
   const [showRingDetail,setShowRingDetail]=useState(false);
   const [favCats,setFavCats]=useState(()=>{try{return JSON.parse(localStorage.getItem("favCats")||"[]");}catch{return [];}});
   const docRef=useRef(); const fotoRef=useRef();
@@ -1099,9 +1180,12 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
 
   const handleFoto=async(e)=>{
     const file=e.target.files?.[0];if(!file)return;
-    const blob=await compressImage(file,800);
-    const url=URL.createObjectURL(blob);
-    setImgPreview(url);set("fotoBlob",blob);set("fotoUrl",url);
+    e.target.value="";
+    const blob=await preparePhoto(file);
+    if(!blob){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
+    let dataUrl=null; try{dataUrl=await blobToDataURL(blob);}catch(_){}
+    if(!dataUrl){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
+    setImgPreview(dataUrl);set("fotoBlob",blob);set("fotoUrl",dataUrl);
   };
 
   const addCurrentItem=()=>{
@@ -1113,7 +1197,7 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
   const stepTitles=["","👤 Cliente","💎 Oggetto","🔧 Tipo lavoro","📝 Descrizione","🔍 Problema","💰 Preventivo","✅ Riepilogo"];
 
   return (
-    <FullScreen onClose={onClose} title={step===0?"👷 Operatore":stepTitles[step]} step={step||undefined} totalSteps={TOTAL}>
+    <FullScreen onClose={closeWizard} title={step===0?"👷 Operatore":stepTitles[step]} step={step||undefined} totalSteps={TOTAL}>
       {showRingDetail&&<RingDetailModal form={form} set={set} onSkip={()=>{setShowRingDetail(false);setStep(4);}} onConfirm={()=>{setShowRingDetail(false);setStep(4);}}/>}
 
       {/* STEP 0 — Operatore */}
@@ -1339,7 +1423,7 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
           <IOSRow icon="⏳" label="Richiesta preventivo" value={form.richiestaPreventivo?"Sì":"No"}/>
           <IOSRow icon="📅" label="Consegna prevista" value={fmtDate(form.dataConsegna)||"—"} last/>
         </IOSCard>
-        <Btn label="✓ Crea riparazione e stampa etichette" full onClick={()=>onSave(form)}/>
+        <Btn label="✓ Crea riparazione e stampa etichette" full onClick={()=>{clearDraft();onSave(form);}}/>
         <div style={{height:10}}/>
         <button onClick={addCurrentItem} style={{width:"100%",background:"#F0FFF4",border:"2px dashed #34C759",borderRadius:14,padding:14,color:"#059669",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"-apple-system,sans-serif",marginBottom:10}}>➕ Aggiungi altro oggetto</button>
         <Btn label="← Modifica" variant="secondary" full onClick={()=>setStep(6)}/>
@@ -2239,11 +2323,33 @@ function RepairDetail({repair:r,customer:c,ddt,onClose,onReceipt,onStatusChange,
   const saveSpesa=()=>{onSpesaChange&&onSpesaChange(r.id,spesaInput===""?null:parseFloat(spesaInput)||null);setEditSpesa(false);};
   const startEditDdtForn=()=>{setDdtFornInput(r.ddtFornitore||"");setEditDdtForn(true);};
   const saveDdtForn=()=>{onFieldChange&&onFieldChange(r.id,{ddtFornitore:ddtFornInput.trim()||null});setEditDdtForn(false);};
+  /* Foto dal dettaglio: per riparazioni create senza foto (o da sostituire). */
+  const fotoDetRef=useRef(); const [fotoBusy,setFotoBusy]=useState(false);
+  const handleDetailFoto=async(e)=>{
+    const file=e.target.files?.[0];if(!file)return;
+    e.target.value="";
+    setFotoBusy(true);
+    try {
+      const blob=await preparePhoto(file);
+      if(!blob){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
+      const url=await uploadPhoto(blob,r.id);
+      if(!url){showToast(`⚠️ Foto non salvata${_lastPhotoError?` (${_lastPhotoError})`:""}`,'#DC2626',7000);return;}
+      /* stesso path su storage (upsert): il ?v= evita la cache del browser sulla vecchia immagine */
+      onFieldChange&&onFieldChange(r.id,{fotoUrl:`${url}?v=${Date.now()}`});
+      showToast("📷 Foto salvata");
+    } finally { setFotoBusy(false); }
+  };
   const startEditFinale=()=>{setFinaleInput(r.prezzoFinale!=null?String(r.prezzoFinale):"");setEditFinale(true);};
   const saveFinale=()=>{onPrezzoFinaleChange&&onPrezzoFinaleChange(r.id,finaleInput===""?null:parseFloat(finaleInput)||null);setEditFinale(false);};
   return (
     <Sheet onClose={onClose} title={r.numero}>
-      {r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:14,marginBottom:12}}/>}
+      {r.fotoUrl&&<img src={r.fotoUrl} alt="oggetto" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:14,marginBottom:6}}/>}
+      {onFieldChange&&<div style={{marginBottom:12,textAlign:r.fotoUrl?"right":"left"}}>
+        <button onClick={()=>fotoDetRef.current&&fotoDetRef.current.click()} disabled={fotoBusy} style={{background:r.fotoUrl?"none":"#FDF6DC",border:r.fotoUrl?"none":"2px dashed #C9A227",borderRadius:12,padding:r.fotoUrl?"4px 0":"12px 14px",width:r.fotoUrl?"auto":"100%",color:"#B8860B",fontSize:14,fontWeight:600,cursor:fotoBusy?"default":"pointer",opacity:fotoBusy?.6:1,fontFamily:"inherit"}}>
+          {fotoBusy?"⏳ Salvataggio foto…":r.fotoUrl?"📷 Sostituisci foto":"📷 Aggiungi foto dell'oggetto"}
+        </button>
+        <input ref={fotoDetRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleDetailFoto}/>
+      </div>}
       <div style={{display:"flex",alignItems:"flex-start",gap:14,background:C.white,borderRadius:20,padding:16,marginBottom:12}}>
         <div style={{width:54,height:54,borderRadius:27,background:STATUSES[r.status]?.bg||"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0}}>{catIcon}</div>
         <div style={{flex:1,minWidth:0}}>
@@ -3684,8 +3790,11 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
 
   const handleFoto=async(e)=>{
     const file=e.target.files?.[0];if(!file)return;
-    const blob=await compressImage(file,800,0.7);
-    const dataUrl=await blobToDataURL(blob);
+    e.target.value="";
+    const blob=await preparePhoto(file);
+    if(!blob){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
+    let dataUrl=null; try{dataUrl=await blobToDataURL(blob);}catch(_){}
+    if(!dataUrl){showToast("⚠️ Foto non leggibile: riprova o scegli un'altra immagine",'#DC2626',5000);return;}
     setImgPreview(dataUrl);
     set("fotoUrl",dataUrl);
     set("fotoBlob",blob);
