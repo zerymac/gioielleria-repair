@@ -151,3 +151,59 @@ test("FIX C3 — Supabase irraggiungibile all'avvio: l'app avvisa con il banner 
   // ora il degrado offline e' segnalato, non silenzioso
   await screen.findByText(/aggiornati/);
 });
+
+/* 24/09/2026 — R2026-0598 persa due volte: cliente mai arrivato a Supabase, wizard
+ * proseguito con customerId fantasma, INSERT riparazione fallito (FK) e ignorato. */
+test("FIX salvataggi — cliente non salvato: il wizard NON va avanti; riparazione non salvata: wizard aperto, bozza intatta, niente WA", async () => {
+  render(<App />);
+  await unlockAndLoad();
+  click(screen.getByText("+ Nuova Riparazione"));
+  await screen.findByText("Chi prende la riparazione?");
+  click(screen.getByText("Adri")); click(screen.getByText("Avanti →"));
+  await screen.findByText("Chi è il cliente?");
+
+  // 1) nuovo cliente con DB che rifiuta la scrittura
+  click(screen.getByText(/Aggiungi nuovo cliente/));
+  type(screen.getByPlaceholderText("Nome *"), "Antonella");
+  type(screen.getByPlaceholderText("Cognome *"), "Bologna");
+  __fake.setFailWrites(true);
+  click(screen.getByText("Aggiungi →"));
+  await screen.findByText(/Cliente non salvato/);
+  expect(screen.queryByText("Che tipo di oggetto?")).toBeNull(); // resta sullo step cliente
+  expect(__fake.db.customers.find(c => c.cognome === "Bologna")).toBeUndefined();
+
+  // 2) con il DB tornato ok il cliente si salva e si prosegue
+  __fake.setFailWrites(false);
+  click(screen.getByText("Aggiungi →"));
+  await screen.findByText("Che tipo di oggetto?");
+  expect(__fake.db.customers.find(c => c.cognome === "Bologna")).toBeTruthy();
+  click(screen.getByText("Gioiello"));
+  await screen.findByText("Che lavoro serve?");
+  click(screen.getByText("Riparazione"));
+  await screen.findByText("Descrivi l'oggetto");
+  type(screen.getByPlaceholderText("Es. Anello in oro giallo con solitario brillante…"), "Bracciale");
+  click(screen.getByText("Avanti →"));
+  await screen.findByText("Descrivi il problema");
+  type(screen.getByPlaceholderText("Es. Catena rotta a 3 cm dalla chiusura…"), "Chiusura");
+  click(screen.getByText("Avanti →"));
+  await screen.findByText("Preventivo e date");
+  click(screen.getByText("Rivedi riepilogo →"));
+  await screen.findByText("Tutto pronto!");
+
+  // 3) la riparazione fallisce: wizard aperto, bozza in localStorage, nessun WA
+  __fake.setFailWrites(true);
+  click(screen.getByText(/Crea riparazione e stampa/));
+  await screen.findByText(/NON salvata/);
+  expect(screen.getByText("Tutto pronto!")).toBeInTheDocument();
+  expect(localStorage.getItem("repairWizardDraft")).toBeTruthy();
+  expect(__fake.db.repairs).toHaveLength(0);
+  expect(__fake.db.wa_jobs).toHaveLength(0);
+
+  // 4) riprova con DB ok: salvata, bozza cancellata
+  __fake.setFailWrites(false);
+  click(screen.getByText(/Crea riparazione e stampa/));
+  await screen.findByText(/^Etichette R/);
+  expect(__fake.db.repairs).toHaveLength(1);
+  expect(__fake.db.repairs[0].customer_id).toBe(__fake.db.customers.find(c => c.cognome === "Bologna").id);
+  expect(localStorage.getItem("repairWizardDraft")).toBeNull();
+});

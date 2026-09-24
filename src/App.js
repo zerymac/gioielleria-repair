@@ -131,6 +131,8 @@ const toOrder = (r) => ({ id:r.id, numero:r.numero, customerId:r.customer_id, da
    withSync lo legge dopo l'operazione per mostrare il feedback all'operatore. */
 let _writeError=null;
 const _noteWriteErr=(error)=>{ if(error){ _writeError=error; console.error("DB write error:",error); } };
+let _lastWriteErr=null;
+const _writeErrText=()=>_lastWriteErr?.message||String(_lastWriteErr||"errore sconosciuto");
 
 const api = {
   _takeWriteError(){ const e=_writeError; _writeError=null; return e; },
@@ -1155,6 +1157,7 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
   const [showNew,setShowNew]=useState(false);
   const [newC,setNewC]=useState({nome:"",cognome:"",telefono:"",telefonoPrefisso:"+39",email:"",codiceFiscale:""});
   const [dupWarn,setDupWarn]=useState(null);
+  const [saving,setSaving]=useState(false);
   const [docB64,setDocB64]=useState(null); const [docMsg,setDocMsg]=useState(""); const [docLoad,setDocLoad]=useState(false);
   const [aiLoad,setAiLoad]=useState(false); const [aiMsg,setAiMsg]=useState("");
   /* Bozza in localStorage: su iPhone Safari spesso RICARICA la pagina al ritorno
@@ -1473,7 +1476,7 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
           <IOSRow icon="⏳" label="Richiesta preventivo" value={form.richiestaPreventivo?"Sì":"No"}/>
           <IOSRow icon="📅" label="Consegna prevista" value={fmtDate(form.dataConsegna)||"—"} last/>
         </IOSCard>
-        <Btn label="✓ Crea riparazione e stampa etichette" full onClick={()=>{clearDraft();onSave(form);}}/>
+        <Btn label={saving?"Salvataggio…":"✓ Crea riparazione e stampa etichette"} full disabled={saving} onClick={async()=>{setSaving(true);try{if(await onSave(form))clearDraft();}finally{setSaving(false);}}}/>
         <div style={{height:10}}/>
         <button onClick={addCurrentItem} style={{width:"100%",background:"#F0FFF4",border:"2px dashed #34C759",borderRadius:14,padding:14,color:"#059669",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"-apple-system,sans-serif",marginBottom:10}}>➕ Aggiungi altro oggetto</button>
         <Btn label="← Modifica" variant="secondary" full onClick={()=>setStep(6)}/>
@@ -4501,7 +4504,8 @@ function MainApp() {
 
   useEffect(()=>{if(!syncErr)return;const t=setTimeout(()=>setSyncErr(false),4000);return()=>clearTimeout(t);},[syncErr]);
 
-  const withSync=async fn=>{api._takeWriteError();setSyncing(true);try{await fn();}catch(e){_writeError=e;}finally{setSyncing(false);}if(api._takeWriteError())setSyncErr(true);};
+  /* Ritorna false se la scrittura è fallita: chi chiama NON deve andare avanti come se fosse salvato. */
+  const withSync=async fn=>{api._takeWriteError();setSyncing(true);try{await fn();}catch(e){_writeError=e;}finally{setSyncing(false);}const err=api._takeWriteError();if(err){_lastWriteErr=err;setSyncErr(true);return false;}return true;};
   const getDDT=r=>ddts.find(d=>d.riparazioniIds?.includes(r.id));
   const openReceipt=(rep,preloadedCustomer)=>{
     if(!rep)return;
@@ -4634,7 +4638,9 @@ function MainApp() {
   };
 
   const handleSoftDelete=async id=>{await withSync(()=>api.softDeleteRepair(id));setViewRepair(null);};
-  const handleWizardAddCustomer=async(data,cb)=>{await withSync(()=>api.upsertCustomer(data));cb(data.id);};
+  /* 24/09/2026: il cliente non arrivava a Supabase ma il wizard proseguiva con un
+     customerId inesistente → la riparazione poi falliva la FK e spariva in silenzio. */
+  const handleWizardAddCustomer=async(data,cb)=>{if(await withSync(()=>api.upsertCustomer(data)))cb(data.id);else showToast("⚠️ Cliente non salvato: controlla la connessione e premi di nuovo Aggiungi",'#DC2626',7000);};
 
   /* Rientro rapido: aggiorna riparazioni selezionate e controlla DDT */
   const handleRientroRapido=async(selectedIds,costs,rientroInfo)=>{
@@ -4804,7 +4810,6 @@ function MainApp() {
     const allItems=[...(form.items||[]),{categoria:form.categoria,tipoLavoro:form.tipoLavoro,descrizione:form.descrizione,materiali:form.materiali,marca:form.marca,referenza:form.referenza,problema:form.problema,mano:form.mano,dito:form.dito}];
     const c=customers.find(x=>x.id===form.customerId);
     const savedRepairs=[];
-    setSyncing(true);
     for(let i=0;i<allItems.length;i++){
       const item=allItems[i];
       const numero=await api.getNextRepairNum();
@@ -4821,10 +4826,12 @@ function MainApp() {
         n.fotoUrls=urls; n.fotoUrl=urls[0]||null;
         if(failed) showToast(`⚠️ ${failed===1?"Una foto non è stata salvata":failed+" foto non sono state salvate"}${_lastPhotoError?` (${_lastPhotoError})`:""}. Riparazione registrata${urls.length?" con le altre foto":" senza foto"}.`,'#DC2626',7000);
       }
-      await api.upsertRepair(n);
+      if(!await withSync(()=>api.upsertRepair(n))){
+        showToast(`⚠️ Riparazione ${numero} NON salvata (${_writeErrText()}). Il wizard resta aperto: riprova.`,'#DC2626',9000);
+        return false;
+      }
       savedRepairs.push(n);
     }
-    setSyncing(false);
     setWizard(false);
     if(c&&savedRepairs.length>0){
       setReceiptModal({repair:savedRepairs[0],customer:c,allRepairs:savedRepairs});
@@ -4832,6 +4839,7 @@ function MainApp() {
          wa_jobs → bot sul Mac mini), qualunque dispositivo stia usando l'operatore. */
       if(c.telefono) enqueueWA([{telefono:waPhone(c),messaggio:nuovaRiparazioneMsg(c,savedRepairs)}],"nuova_riparazione");
     }
+    return true;
   };
 
   const handleSaveCustomer=async data=>{await withSync(()=>api.upsertCustomer(data.id?data:{...data,id:uid()}));setCustomerForm(null);};
