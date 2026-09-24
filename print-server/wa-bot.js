@@ -428,23 +428,41 @@ function initWABot() {
     webVersionCache: { type: 'local', path: path.join(__dirname, '.wwebjs_cache'), strict: true },
   });
 
+  /* Stato per il gestionale (tabella stato_servizi, migration 161): il banner
+     in App.tsx mostra «WhatsApp scollegato» e il QR da scansionare. Un
+     battito ogni minuto tiene fresco aggiornato_at: se resta vecchio il
+     gestionale capisce che il print server e' spento. Su DB vecchio (tabella
+     assente) si logga e basta. */
+  let statoCorrente = { stato: 'errore', dettaglio: 'Avvio in corso', qr: null };
+  async function segnaStato(stato, dettaglio = null, qr = null) {
+    statoCorrente = { stato, dettaglio, qr };
+    const { error } = await supabase.from('stato_servizi')
+      .upsert({ servizio: 'whatsapp', stato, dettaglio, qr, aggiornato_at: new Date().toISOString() });
+    if (error) console.warn(`⚠️  stato_servizi non aggiornato (${error.message})`);
+  }
+  setInterval(() => segnaStato(statoCorrente.stato, statoCorrente.dettaglio, statoCorrente.qr).catch(() => {}), 60 * 1000);
+
+  let qrAperto = false;
   waClient.on('qr', async qr => {
+    segnaStato('qr', 'WhatsApp del negozio scollegato: scansiona il QR dal telefono del negozio', qr).catch(() => {});
+    if (qrAperto) return; /* il QR si rigenera ogni ~30 s: Anteprima si apre una volta sola */
+    qrAperto = true;
     const qrPath = path.join(os.tmpdir(), 'zerrillo-wa-qr.png');
     try {
       await qrcode.toFile(qrPath, qr, { width: 400, margin: 2 });
       exec(`open "${qrPath}"`);
-      console.log(`\n📱 QR aperto automaticamente — scansionalo con WhatsApp sul telefono`);
-      console.log(`   (il QR scade in ~60 secondi — riavvia il server se non fai in tempo)\n`);
+      console.log(`\n📱 QR aperto in Anteprima (e nel gestionale) — scansionalo con WhatsApp sul telefono\n`);
     } catch (e) {
       console.log('\n📱 Scansiona il QR — apri questo file:', qrPath);
     }
   });
 
-  waClient.on('authenticated', () => console.log('🔐 WhatsApp autenticato'));
+  waClient.on('authenticated', () => { console.log('🔐 WhatsApp autenticato'); segnaStato('ok', 'Autenticato, connessione in corso').catch(() => {}); });
 
   waClient.on('ready', async () => {
     console.log('✅ WhatsApp connesso e pronto');
     waReady = true;
+    segnaStato('ok').catch(() => {});
     if (!realtimeStarted) {
       realtimeStarted = true;
       await startRealtimeSubscription(supabase);
@@ -456,12 +474,17 @@ function initWABot() {
   waClient.on('auth_failure', msg => {
     console.error('❌ WhatsApp autenticazione fallita:', msg);
     waReady = false;
+    segnaStato('errore', `Autenticazione WhatsApp fallita: ${msg}`).catch(() => {});
   });
 
+  /* Scollegato (dal telefono, o sessione ritirata da WhatsApp): il client non
+     si riprende da solo. Si esce e launchd (KeepAlive) riavvia in 30 s: al
+     riavvio arriva il QR, che il gestionale mostra nel banner. */
   waClient.on('disconnected', reason => {
-    console.warn('⚠️  WhatsApp disconnesso:', reason);
-    console.warn('   Riavvia il server per riconnetterti');
+    console.warn('⚠️  WhatsApp disconnesso:', reason, '— riavvio fra 5 s');
     waReady = false;
+    segnaStato('scollegato', `WhatsApp disconnesso (${reason}): riavvio in corso, a breve il QR`)
+      .catch(() => {}).finally(() => setTimeout(() => process.exit(1), 5000));
   });
 
   console.log('🔄 Avvio WhatsApp Web client…');
@@ -470,6 +493,7 @@ function initWABot() {
      rejection: Node esce e cadono anche cartellini e ricevute. */
   waClient.initialize().catch(e => {
     waReady = false;
+    segnaStato('errore', `WhatsApp non avviato: ${e.message}`).catch(() => {});
     console.error('❌ WhatsApp non avviato:', e.message);
     console.error('   Stampe attive; per WhatsApp riavvia il server (launchctl kickstart -k gui/501/com.zerrillo.printserver)');
   });
@@ -497,6 +521,18 @@ async function sendBulkWA(messages) {
   }
   console.log(`📊 WA bulk completato: ${sent} inviati, ${failed} falliti`);
   return { sent, failed };
+}
+
+/* Stop pulito (launchctl / kill): si chiude Chrome per bene, cosi' la
+   sessione WhatsApp salvata in .wwebjs_auth arriva integra su disco e al
+   riavvio non serve un QR nuovo. */
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    console.log(`⏹️  ${sig}: chiusura pulita del client WhatsApp…`);
+    const fine = () => process.exit(0);
+    setTimeout(fine, 8000).unref();
+    (waClient ? waClient.destroy() : Promise.resolve()).catch(() => {}).finally(fine);
+  });
 }
 
 module.exports = { initWABot, isWAReady: () => waReady, sendBulkWA };

@@ -233,7 +233,18 @@ function initPrintQueue() {
       if (!res.ok || !/success\s*=\s*"true"/i.test(text)) {
         throw new Error(`Epson ${res.status}: ${text.replace(/\s+/g, ' ').slice(0, 200)}`);
       }
-      await supabase.from('print_jobs').update({ stato: 'done', printed_at: new Date().toISOString() }).eq('id', job.id);
+      /* La risposta si salva com'e' (colonna `risposta`, migration 145 del
+         gestionale): per uno scontrino FISCALE contiene i riferimenti
+         (numero, Z, data, matricola) senza i quali la cassa non puo'
+         annullarlo da software. Se la colonna non c'e' ancora (DB vecchio)
+         si ripiega sull'aggiornamento di prima, cosi' il lavoro non resta
+         appeso in `printing`. */
+      const fine = { stato: 'done', printed_at: new Date().toISOString() };
+      const { error: eRisp } = await supabase.from('print_jobs').update({ ...fine, risposta: text }).eq('id', job.id);
+      if (eRisp) {
+        console.warn(`⚠️  print_jobs.risposta non salvata (${eRisp.message}): segno solo done`);
+        await supabase.from('print_jobs').update(fine).eq('id', job.id);
+      }
       console.log(`🧾 Ricevuta Epson stampata (${job.id})`);
     } catch (e) {
       await supabase.from('print_jobs').update({ stato: 'error', errore: String(e.message || e) }).eq('id', job.id);
