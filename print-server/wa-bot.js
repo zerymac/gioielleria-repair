@@ -442,8 +442,22 @@ function initWABot() {
   }
   setInterval(() => segnaStato(statoCorrente.stato, statoCorrente.dettaglio, statoCorrente.qr).catch(() => {}), 60 * 1000);
 
+  /* Dopo il collegamento WhatsApp Web ricarica la pagina; la libreria si
+     reinietta da sola (framenavigated) ma se la pagina naviga di nuovo a meta'
+     inject l'errore «Execution context was destroyed» e' un unhandled
+     rejection che ammazza Node (e con lui cartellini e ricevute): qui si
+     logga e si lascia che la prossima navigazione reinietti. */
+  process.on('unhandledRejection', e => console.error('⚠️  WhatsApp, errore non gestito (si prosegue):', e && e.message ? e.message : e));
+  let navLog = false;
+  const logNavigazioni = () => {
+    if (navLog || !waClient.pupPage) return;
+    navLog = true;
+    waClient.pupPage.on('framenavigated', f => { if (f === waClient.pupPage.mainFrame()) console.log('↪  WhatsApp Web naviga:', f.url()); });
+  };
+
   let qrAperto = false;
   waClient.on('qr', async qr => {
+    logNavigazioni();
     segnaStato('qr', 'WhatsApp del negozio scollegato: scansiona il QR dal telefono del negozio', qr).catch(() => {});
     if (qrAperto) return; /* il QR si rigenera ogni ~30 s: Anteprima si apre una volta sola */
     qrAperto = true;
@@ -457,7 +471,7 @@ function initWABot() {
     }
   });
 
-  waClient.on('authenticated', () => { console.log('🔐 WhatsApp autenticato'); segnaStato('ok', 'Autenticato, connessione in corso').catch(() => {}); });
+  waClient.on('authenticated', () => { logNavigazioni(); console.log('🔐 WhatsApp autenticato'); segnaStato('ok', 'Autenticato, connessione in corso').catch(() => {}); });
 
   waClient.on('ready', async () => {
     console.log('✅ WhatsApp connesso e pronto');
