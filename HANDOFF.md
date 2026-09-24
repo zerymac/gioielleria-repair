@@ -5,6 +5,11 @@ Mantenere e migliorare l'app React di gestione riparazioni gioielleria "Zerrillo
 
 ## Current Progress
 
+### Sessione 24/09/2026 — cliente e riparazione persi (R2026-0598): errori di scrittura ignorati dal wizard (commit 0f9aab0, PUSHATO)
+- **Diagnosi (log Supabase)**: alle 10:48 (Mac Safari) e 11:43 (iPhone iOS 16) INSERT su `repairs` → 409 `repairs_customer_id_fkey`: il `customer_id` non esisteva. Nessuna POST su `customers` era arrivata a Supabase prima delle 11:46 (terzo tentativo, riuscito). DB sano: 0 orfani, FK valida, nessuna cancellazione. Perché la POST del cliente non sia partita dal browser non è visibile lato server (serve la console del dispositivo).
+- **Bug**: `handleWizardAddCustomer` chiamava `cb(id)` anche con upsert fallito (wizard avanti con customerId fantasma); `handleSaveRepair` non usava `withSync` e ignorava l'errore di `upsertRepair`; il wizard faceva `clearDraft()` PRIMA di `onSave`. Risultato: wizard chiuso, bozza persa, nessun avviso.
+- **Fix**: `withSync` ritorna `true/false`; il cliente prosegue solo se salvato (toast rosso altrimenti); ogni `upsertRepair` passa da `withSync`, in caso di errore toast con messaggio, wizard aperto, niente WA; la bozza si cancella solo dopo `onSave` riuscito, pulsante "Crea riparazione" disabilitato durante il salvataggio. Test di regressione in `app.repairs.test.js`. Suite: **43 passati, 1 skip**. Build ok.
+
 ### Sessione 17/09/2026 (bis) — più foto per riparazione + elimina foto (commit locale, DA PUSHARE)
 - **DB (APPLICATO, migration `repairs_foto_urls_and_photo_delete` = `supabase/sql/fase4-repairs-foto-urls.sql` + rollback)**: `repairs.foto_urls jsonb not null default '[]'` (array di URL pubblici), righe esistenti migrate da `foto_url`; policy `repair_photos_delete` (authenticated) su storage. `foto_url` resta = prima foto (card, etichette, backup). `backup/backup.js` SCHEMA_SQL ha la colonna; `fase2-lockdown-online.sql` (+rollback) include la policy delete.
 - **Modello app**: `toRepair` → `fotoUrls` (fallback `[foto_url]`), `fotoUrl` = prima. `upsertRepair` scrive `foto_url` + `foto_urls` (solo URL http); il fallback PGRST204 toglie anche `foto_urls`. `uploadPhoto(blob,id,suffix)` → `repairs/<id>[-suffix].jpg`; `deletePhoto(url)` → `storage.remove` (path da `photoPathFromUrl`, senza `?v=`). Max **6** foto (`MAX_FOTO`).
