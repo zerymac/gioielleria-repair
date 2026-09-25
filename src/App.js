@@ -74,6 +74,11 @@ const SHOP = {
   sdi:       "WP7SE2Q",
 };
 
+/* Avviso chiusura per rifacimento locali (rimuovere dopo il 21/11/2026) */
+const AVVISO_CHIUSURA = "Le ricordiamo che saremo aperti fino a domenica 4 ottobre compresa (aperti anche la domenica per la Festa Nazionale del Tartufo): sarà l'ultimo giorno utile per ritirare la riparazione. Il negozio resterà poi chiuso per rifacimento dei locali e riaprirà il 21 novembre; dopo il 4 ottobre il ritiro sarà possibile solo dal 21 novembre in poi.";
+const msgPronta = (c, numero, prezzoFinale) =>
+  `Gentile ${c.nome} ${c.cognome},\nla sua riparazione n° ${numero} è pronta per il ritiro.${prezzoFinale?`\n\nImporto da saldare: ${prezzoFinale} €`:""}\n\n${AVVISO_CHIUSURA}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+
 const ORDER_STATUSES = {
   da_ordinare: { label:"Da ordinare", color:"#EF4444", bg:"#FEF2F2" },
   ordinato:    { label:"Ordinato",    color:"#3B82F6", bg:"#EFF6FF" },
@@ -1030,7 +1035,7 @@ function Sheet({children,onClose,title,footer}) {
 
 /* ── WAToast ── */
 function WAToast({repair,customer,onDismiss,customMsg,label,isMD}) {
-  const msg=customMsg||`Gentile ${customer.nome} ${customer.cognome},\nla sua riparazione n° ${repair.numero} è pronta per il ritiro.${repair.prezzoFinale?`\n\nImporto da saldare: ${repair.prezzoFinale} €`:""}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+  const msg=customMsg||msgPronta(customer,repair.numero,repair.prezzoFinale);
   const phone=fullPhone(customer);
   return (
     <div style={{position:"fixed",bottom:isMD?24:90,left:isMD?"50%":"50%",transform:"translateX(-50%)",width:"calc(100% - 32px)",maxWidth:560,background:"#1C1C1E",borderRadius:18,padding:"14px 16px",zIndex:200,display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 32px rgba(0,0,0,.4)",fontFamily:"-apple-system,sans-serif"}}>
@@ -3462,6 +3467,7 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
 
   const filteredGroups=search.trim()
     ?groups.map(g=>({...g,repairs:g.repairs.filter(r=>{
+        if(selected.includes(r.id))return true;
         const c=customers.find(x=>x.id===r.customerId);
         const q=search.trim().toLowerCase();
         return r.numero.toLowerCase().includes(q)||(c&&(c.cognome+" "+c.nome).toLowerCase().includes(q));
@@ -4657,7 +4663,7 @@ function MainApp() {
         if(fi.nuovoStato==="pronto"&&custUpd?.telefono){
           const repConFin={...repUpd,prezzoFinale:fin??repUpd?.prezzoFinale};
           if(bulk){
-            const msg=`Gentile ${custUpd.nome} ${custUpd.cognome},\nla sua riparazione n° ${repUpd.numero} è pronta per il ritiro.${fin?`\n\nImporto da saldare: ${fin} €`:""}\n\n${SHOP.nome}\n${SHOP.indirizzo}, ${SHOP.citta}\nTel. ${SHOP.tel}`;
+            const msg=msgPronta(custUpd,repUpd.numero,fin);
             bulkMessages.push({telefono:waPhone(custUpd),messaggio:msg});
           } else {
             setWaToast({repair:repConFin,customer:custUpd});
