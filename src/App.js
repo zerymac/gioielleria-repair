@@ -3465,13 +3465,12 @@ function RientroRapido({repairs,customers,ddts,onSave,onClose}) {
     return Object.values(map);
   })();
 
-  const filteredGroups=search.trim()
-    ?groups.map(g=>({...g,repairs:g.repairs.filter(r=>{
-        if(selected.includes(r.id))return true;
-        const c=customers.find(x=>x.id===r.customerId);
-        const q=search.trim().toLowerCase();
-        return r.numero.toLowerCase().includes(q)||(c&&(c.cognome+" "+c.nome).toLowerCase().includes(q));
-      })})).filter(g=>g.repairs.length>0)
+  const q=search.trim().toLowerCase();
+  const matches=(r)=>{const c=customers.find(x=>x.id===r.customerId);return r.numero.toLowerCase().includes(q)||(c&&(c.cognome+" "+c.nome).toLowerCase().includes(q));};
+  /* Con ricerca attiva: risultati in alto, poi le già selezionate (restano visibili) */
+  const filteredGroups=q
+    ?groups.map(g=>({...g,repairs:g.repairs.filter(r=>matches(r)||selected.includes(r.id)).sort((a,b)=>matches(b)-matches(a))}))
+      .filter(g=>g.repairs.length>0).sort((a,b)=>b.repairs.some(matches)-a.repairs.some(matches))
     :groups;
 
   const toggle=(id)=>{
