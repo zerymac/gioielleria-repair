@@ -37,6 +37,8 @@ const ordNum = (n) => `ORD${new Date().getFullYear()}-${String(n).padStart(4, "0
 const fullPhone = (c) => c?.telefonoPrefisso && c?.telefono ? (c.telefonoPrefisso + c.telefono).replace(/\D/g, "") : (c?.telefono || "").replace(/\D/g, "");
 const displayPhone = (c) => c?.telefono ? `${c.telefonoPrefisso || "+39"} ${c.telefono}` : "";
 const waPhone = (c) => c?.telefono ? `${c.telefonoPrefisso || "+39"}${c.telefono}` : "";
+/* Prima lettera di ogni parola maiuscola (nomi/cognomi), il resto come digitato */
+const capName = (v) => v.replace(/(^|[\s'-])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
 
 function saveToContacts(c) {
   const lines = [
@@ -1300,8 +1302,8 @@ function RepairWizard({customers,repairs=[],orders=[],onSave,onClose,onAddedCust
                 </div>
               )}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <IOSInput placeholder="Nome *" value={newC.nome} onChange={e=>setNewC(c=>({...c,nome:e.target.value}))}/>
-                <IOSInput placeholder="Cognome *" value={newC.cognome} onChange={e=>setNewC(c=>({...c,cognome:e.target.value}))}/>
+                <IOSInput placeholder="Nome *" value={newC.nome} onChange={e=>setNewC(c=>({...c,nome:capName(e.target.value)}))}/>
+                <IOSInput placeholder="Cognome *" value={newC.cognome} onChange={e=>setNewC(c=>({...c,cognome:capName(e.target.value)}))}/>
               </div>
               <div><div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>Telefono</div><PhoneInput prefisso={newC.telefonoPrefisso} telefono={newC.telefono} onPrefisso={v=>setNewC(c=>({...c,telefonoPrefisso:v}))} onTelefono={v=>setNewC(c=>({...c,telefono:v}))}/></div>
               <IOSInput placeholder="Email" type="email" value={newC.email||""} onChange={e=>setNewC(c=>({...c,email:e.target.value}))}/>
@@ -2774,7 +2776,7 @@ function CustomerForm({customer,customers=[],repairs=[],orders=[],onSelectExisti
     <Sheet onClose={onClose} title={customer?"Modifica Cliente":"Nuovo Cliente"}>
       {aiEnabled&&(<div style={{background:"#F0F4FF",borderRadius:14,padding:12,marginBottom:16,border:"1px solid #C7D2FE"}}><div style={{fontSize:12,fontWeight:700,color:"#3B5EDB",marginBottom:8}}>🤖 Scansione documento d'identità</div><div style={{display:"flex",gap:8}}><button onClick={()=>ref.current.click()} style={{flex:1,border:"1px solid #C7D2FE",borderRadius:10,padding:10,background:"white",color:"#3B5EDB",fontSize:13,fontWeight:600,cursor:"pointer"}}>{imgB64?"📄 ✓ Caricato":"📷 Carica doc"}</button><button onClick={scan} disabled={!imgB64||aiLoad} style={{flex:1,background:"#3B5EDB",color:"white",border:"none",borderRadius:10,padding:10,fontSize:13,fontWeight:700,cursor:"pointer",opacity:(!imgB64||aiLoad)?.4:1}}>{aiLoad?"⏳…":"🔍 Leggi AI"}</button></div><input ref={ref} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const fi=e.target.files?.[0];if(!fi)return;const r=new FileReader();r.onload=ev=>setImgB64(ev.target.result.split(",")[1]);r.readAsDataURL(fi);}}/>{msg&&<div style={{fontSize:12,color:"#3B5EDB",marginTop:6}}>{msg}</div>}</div>)}
       <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><IOSInput placeholder="Nome *" value={f.nome} onChange={e=>set("nome",e.target.value)}/><IOSInput placeholder="Cognome *" value={f.cognome} onChange={e=>set("cognome",e.target.value)}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><IOSInput placeholder="Nome *" value={f.nome} onChange={e=>set("nome",capName(e.target.value))}/><IOSInput placeholder="Cognome *" value={f.cognome} onChange={e=>set("cognome",capName(e.target.value))}/></div>
         <div><div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>Telefono</div><PhoneInput prefisso={f.telefonoPrefisso} telefono={f.telefono} onPrefisso={v=>set("telefonoPrefisso",v)} onTelefono={v=>set("telefono",v)}/></div>
         <IOSInput placeholder="Email" type="email" value={f.email||""} onChange={e=>set("email",e.target.value)}/>
         <IOSInput placeholder="Indirizzo" value={f.indirizzo||""} onChange={e=>set("indirizzo",e.target.value)}/>
@@ -3954,8 +3956,8 @@ function OrderForm({order,customers,repairs=[],orders=[],onSave,onClose,onAddedC
             <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
               <div style={{fontSize:16,fontWeight:700,color:C.label}}>Nuovo cliente</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <IOSInput placeholder="Nome *" value={newC.nome} onChange={e=>setNewC(c=>({...c,nome:e.target.value}))}/>
-                <IOSInput placeholder="Cognome *" value={newC.cognome} onChange={e=>setNewC(c=>({...c,cognome:e.target.value}))}/>
+                <IOSInput placeholder="Nome *" value={newC.nome} onChange={e=>setNewC(c=>({...c,nome:capName(e.target.value)}))}/>
+                <IOSInput placeholder="Cognome *" value={newC.cognome} onChange={e=>setNewC(c=>({...c,cognome:capName(e.target.value)}))}/>
               </div>
               <div><div style={{fontSize:13,fontWeight:600,color:C.secondary,marginBottom:6}}>Telefono</div><PhoneInput prefisso={newC.telefonoPrefisso} telefono={newC.telefono} onPrefisso={v=>setNewC(c=>({...c,telefonoPrefisso:v}))} onTelefono={v=>setNewC(c=>({...c,telefono:v}))}/></div>
               <IOSInput placeholder="Email" type="email" value={newC.email||""} onChange={e=>setNewC(c=>({...c,email:e.target.value}))}/>
