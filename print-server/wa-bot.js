@@ -509,6 +509,15 @@ function initWABot() {
     waReady = false;
     segnaStato('errore', `WhatsApp non avviato: ${e.message}`).catch(() => {});
     console.error('❌ WhatsApp non avviato:', e.message);
+    /* Rete assente all'avvio (Mac acceso prima del router): senza rete non
+       girano nemmeno le stampe, quindi si esce e launchd riavvia in 30 s
+       finche' la rete torna. Gli altri errori restano senza riavvio: con la
+       build bloccata ogni riavvio puo' chiedere un QR nuovo. */
+    if (/net::ERR_(NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_|ADDRESS_UNREACHABLE|NETWORK_CHANGED)/.test(e.message)) {
+      console.error('   Rete assente: riavvio fra 30 s');
+      setTimeout(() => process.exit(1), 30000);
+      return;
+    }
     console.error('   Stampe attive; per WhatsApp riavvia il server (launchctl kickstart -k gui/501/com.zerrillo.printserver)');
   });
 }
