@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Zerrillo — Backup automatico giornaliero
- * Esegue backup del database Supabase e del codice sorgente dell'app.
+ * Esegue backup del database Supabase (riparazioni + tutto il gestionale),
+ * specchio dei bucket Storage e codice sorgente dell'app.
  * Conserva gli ultimi 30 giorni, elimina i più vecchi.
  */
 
@@ -9,6 +10,7 @@ const { createClient } = require("@supabase/supabase-js");
 const fs   = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const zlib = require("zlib");
 
 /* ── Configurazione ─────────────────────────────────────── */
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -240,6 +242,58 @@ async function main() {
   const sqlFile = path.join(destDir, `schema-${dateStr}.sql`);
   fs.writeFileSync(sqlFile, SCHEMA_SQL, "utf8");
   log(`Schema SQL salvato: ${sqlFile}`);
+
+  /* ── 1b. Gestionale: TUTTE le tabelle public (elenco dalla RPC backup_tabelle, migr. 191) ── */
+  log("Gestionale: esportazione di tutte le tabelle…");
+  const gestDir = path.join(destDir, `gestionale-${dateStr}`);
+  fs.mkdirSync(gestDir, { recursive: true });
+  const { data: tabelle, error: errTab } = await supabase.rpc("backup_tabelle");
+  if (errTab) throw new Error("backup_tabelle: " + errTab.message);
+  let righeTot = 0;
+  for (const { tabella, pk } of tabelle) {
+    let all = [], from = 0, done = false;
+    while (!done) {
+      let q = supabase.from(tabella).select("*").range(from, from + PAGE - 1);
+      for (const col of (pk || "").split(",").filter(Boolean)) q = q.order(col);
+      const { data, error } = await q;
+      if (error) throw new Error(`Errore lettura ${tabella} (offset ${from}): ${error.message}`);
+      all = all.concat(data);
+      done = data.length < PAGE;
+      from += PAGE;
+    }
+    fs.writeFileSync(path.join(gestDir, `${tabella}.json.gz`), zlib.gzipSync(JSON.stringify(all)));
+    righeTot += all.length;
+  }
+  log(`  → ${tabelle.length} tabelle, ${righeTot} righe in ${gestDir}`);
+
+  /* ── 1c. Storage: specchio incrementale dei bucket (foto, documenti) ──
+     Una sola cartella, non per giorno: 1,5 GB. Si scarica solo cio' che manca
+     o ha cambiato dimensione; cio' che sparisce da Supabase RESTA qui.
+     ponytail: lo specchio non si pota mai; se cresce troppo, pulizia a mano. */
+  log("Storage: specchio dei bucket…");
+  const storDir = path.join(BACKUP_DIR, "storage");
+  const oggetti = [];
+  for (let from = 0; ; from += PAGE) { // PostgREST taglia a 1000 righe anche le RPC
+    const { data, error } = await supabase.rpc("backup_oggetti_storage").range(from, from + PAGE - 1);
+    if (error) throw new Error("backup_oggetti_storage: " + error.message);
+    oggetti.push(...data);
+    if (data.length < PAGE) break;
+  }
+  let scaricati = 0, falliti = 0;
+  const daFare = oggetti.filter(o => {
+    const f = path.join(storDir, o.bucket, o.nome);
+    return !(fs.existsSync(f) && fs.statSync(f).size === Number(o.dimensione));
+  });
+  const scarica = async o => {
+    const { data, error } = await supabase.storage.from(o.bucket).download(o.nome);
+    if (error) { falliti++; log(`  ⚠️ ${o.bucket}/${o.nome}: ${error.message}`); return; }
+    const f = path.join(storDir, o.bucket, o.nome);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, Buffer.from(await data.arrayBuffer()));
+    scaricati++;
+  };
+  for (let i = 0; i < daFare.length; i += 4) await Promise.all(daFare.slice(i, i + 4).map(scarica));
+  log(`  → ${oggetti.length} oggetti, ${scaricati} scaricati, ${falliti} falliti`);
 
   /* ── 2. Backup sorgente app ── */
   log("Creazione archivio sorgente app…");
